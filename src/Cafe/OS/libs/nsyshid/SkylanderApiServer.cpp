@@ -13,6 +13,12 @@
 
 namespace nsyshid
 {
+	namespace
+	{
+		constexpr size_t kMaxRequestBodySize = 10 * 1024 * 1024;
+		const std::regex kSlotRegex(R"(^/api/skylanders/slots/([0-9]{1,2})(?:/(load|create))?$)");
+	}
+
 	SkylanderApiServer& SkylanderApiServer::GetInstance()
 	{
 		static SkylanderApiServer s_instance;
@@ -169,6 +175,7 @@ namespace nsyshid
 		case 200: return "OK";
 		case 201: return "Created";
 		case 400: return "Bad Request";
+		case 413: return "Payload Too Large";
 		case 404: return "Not Found";
 		case 405: return "Method Not Allowed";
 		case 409: return "Conflict";
@@ -259,6 +266,8 @@ namespace nsyshid
 				return MakeJsonError(400, "Invalid Content-Length");
 			}
 		}
+		if (contentLength > kMaxRequestBodySize)
+			return MakeJsonError(413, "Payload too large");
 
 		if (contentLength > 0)
 		{
@@ -341,7 +350,10 @@ namespace nsyshid
 				boost::asio::ssl::stream<boost::asio::ip::tcp::socket> sslStream(std::move(socket), *m_httpsSslContext);
 				sslStream.handshake(boost::asio::ssl::stream_base::server, ec);
 				if (ec)
+				{
+					cemuLog_log(LogType::Force, "Skylander API HTTPS handshake failed: {}", ec.message());
 					continue;
+				}
 				auto response = ReadAndHandleRequest(sslStream);
 				WriteResponse(sslStream, response);
 				sslStream.shutdown(ec);
@@ -550,10 +562,9 @@ namespace nsyshid
 			return MakeJsonOk(s.GetString());
 		}
 
-		const std::regex slotRegex(R"(^/api/skylanders/slots/([0-9]{1,2})(?:/(load|create))?$)");
 		std::smatch match;
 		const std::string pathString(path);
-		if (std::regex_match(pathString, match, slotRegex))
+		if (std::regex_match(pathString, match, kSlotRegex))
 		{
 			const auto slotNum = std::stoi(match[1].str());
 			if (slotNum >= MAX_SKYLANDERS)

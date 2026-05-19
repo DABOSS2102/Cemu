@@ -164,8 +164,8 @@ wxPanel* EmulatedUSBDeviceFrame::AddSkylanderPage(wxNotebook* notebook)
 		std::string error;
 		if (!nsyshid::SkylanderPortalManager::GetInstance().SetStorageFolderPath(_utf8ToPath(m_skylanderFolderPicker->GetPath().utf8_string()), error))
 		{
-			wxMessageDialog folderError(this, wxString::FromUTF8(error));
-			folderError.ShowModal();
+			wxMessageDialog errorDialog(this, wxString::FromUTF8(error));
+			errorDialog.ShowModal();
 			return;
 		}
 		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();

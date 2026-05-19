@@ -6,6 +6,14 @@
 
 namespace nsyshid
 {
+	namespace
+	{
+		constexpr uint8 SKY_ID_OFFSET_LOW = 0x10;
+		constexpr uint8 SKY_ID_OFFSET_HIGH = 0x11;
+		constexpr uint8 SKY_VAR_OFFSET_LOW = 0x1C;
+		constexpr uint8 SKY_VAR_OFFSET_HIGH = 0x1D;
+	}
+
 	SkylanderPortalManager& SkylanderPortalManager::GetInstance()
 	{
 		static SkylanderPortalManager s_instance;
@@ -143,8 +151,8 @@ namespace nsyshid
 			return false;
 		}
 
-		const uint16 skyId = uint16(fileData[0x11]) << 8 | uint16(fileData[0x10]);
-		const uint16 skyVar = uint16(fileData[0x1D]) << 8 | uint16(fileData[0x1C]);
+		const uint16 skyId = uint16(fileData[SKY_ID_OFFSET_HIGH]) << 8 | uint16(fileData[SKY_ID_OFFSET_LOW]);
+		const uint16 skyVar = uint16(fileData[SKY_VAR_OFFSET_HIGH]) << 8 | uint16(fileData[SKY_VAR_OFFSET_LOW]);
 
 		std::lock_guard lock(m_mutex);
 		if (m_slots[uiSlot].has_value())
