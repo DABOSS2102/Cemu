@@ -271,16 +271,13 @@ namespace nsyshid
 
 		if (contentLength > 0)
 		{
-			body.assign(std::istreambuf_iterator<char>(requestStream), std::istreambuf_iterator<char>());
-			if (body.size() < contentLength)
+			body.resize(contentLength);
+			size_t alreadyBuffered = std::min(contentLength, (size_t)requestBuf.size());
+			if (alreadyBuffered > 0)
+				requestStream.read(body.data(), (std::streamsize)alreadyBuffered);
+			if (alreadyBuffered < contentLength)
 			{
-				std::string remaining(contentLength - body.size(), '\0');
-				boost::asio::read(stream, boost::asio::buffer(remaining.data(), remaining.size()));
-				body += remaining;
-			}
-			else if (body.size() > contentLength)
-			{
-				body.resize(contentLength);
+				boost::asio::read(stream, boost::asio::buffer(body.data() + alreadyBuffered, contentLength - alreadyBuffered));
 			}
 		}
 
@@ -562,22 +559,22 @@ namespace nsyshid
 			return MakeJsonOk(s.GetString());
 		}
 
-		std::smatch match;
-		const std::string pathString(path);
-		if (std::regex_match(pathString, match, kSlotRegex))
+		std::match_results<std::string_view::const_iterator> match;
+		if (std::regex_match(path.begin(), path.end(), match, kSlotRegex))
 		{
-			const auto slotNum = std::stoi(match[1].str());
+			const auto slotNum = std::stoi(std::string(match[1].first, match[1].second));
 			if (slotNum >= MAX_SKYLANDERS)
 				return MakeJsonError(400, "Invalid slot index");
 			const uint8 slot = (uint8)slotNum;
-			if (method == "DELETE" && match[2].str().empty())
+			const std::string action(match[2].first, match[2].second);
+			if (method == "DELETE" && action.empty())
 			{
 				SkylanderPortalManager::GetInstance().ClearSkylander(slot);
 				return MakeJsonOk(R"({"ok":true})");
 			}
-			if (method == "POST" && match[2].str() == "load")
+			if (method == "POST" && action == "load")
 				return HandleSlotLoad(slot, body);
-			if (method == "POST" && match[2].str() == "create")
+			if (method == "POST" && action == "create")
 				return HandleSlotCreate(slot, body);
 			return MakeJsonError(405, "Unsupported method for slot route");
 		}

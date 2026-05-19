@@ -63,7 +63,9 @@ namespace nsyshid
 			if (*baseIt != *candIt)
 				return false;
 		}
-		return baseIt == base.end();
+		if (baseIt != base.end())
+			return false;
+		return true;
 	}
 
 	bool SkylanderPortalManager::SetStorageFolderPath(const fs::path& folderPath, std::string& error)
