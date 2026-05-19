@@ -237,8 +237,11 @@ namespace nsyshid
 			{
 				auto key = headerLine.substr(0, pos);
 				auto value = headerLine.substr(pos + 1);
-				while (!value.empty() && value.front() == ' ')
-					value.erase(value.begin());
+				const auto firstNotSpace = value.find_first_not_of(' ');
+				if (firstNotSpace == std::string::npos)
+					value.clear();
+				else if (firstNotSpace > 0)
+					value.erase(0, firstNotSpace);
 				headers[std::move(key)] = std::move(value);
 			}
 		}
@@ -553,7 +556,7 @@ namespace nsyshid
 		if (std::regex_match(pathString, match, slotRegex))
 		{
 			const auto slotNum = std::stoi(match[1].str());
-			if (slotNum < 0 || slotNum >= MAX_SKYLANDERS)
+			if (slotNum >= MAX_SKYLANDERS)
 				return MakeJsonError(400, "Invalid slot index");
 			const uint8 slot = (uint8)slotNum;
 			if (method == "DELETE" && match[2].str().empty())
