@@ -289,6 +289,16 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	emulated_usb_devices.emulate_skylander_portal = usbdevices.get("EmulateSkylanderPortal", emulated_usb_devices.emulate_skylander_portal);
 	emulated_usb_devices.emulate_infinity_base = usbdevices.get("EmulateInfinityBase", emulated_usb_devices.emulate_infinity_base);
 	emulated_usb_devices.emulate_dimensions_toypad = usbdevices.get("EmulateDimensionsToypad", emulated_usb_devices.emulate_dimensions_toypad);
+	emulated_usb_devices.skylander_api_enabled = usbdevices.get("SkylanderApiEnabled", emulated_usb_devices.skylander_api_enabled);
+	emulated_usb_devices.skylander_api_http_enabled = usbdevices.get("SkylanderApiHttpEnabled", emulated_usb_devices.skylander_api_http_enabled);
+	emulated_usb_devices.skylander_api_http_host = usbdevices.get("SkylanderApiHttpHost", emulated_usb_devices.skylander_api_http_host);
+	emulated_usb_devices.skylander_api_http_port = usbdevices.get("SkylanderApiHttpPort", emulated_usb_devices.skylander_api_http_port);
+	emulated_usb_devices.skylander_api_https_enabled = usbdevices.get("SkylanderApiHttpsEnabled", emulated_usb_devices.skylander_api_https_enabled);
+	emulated_usb_devices.skylander_api_https_host = usbdevices.get("SkylanderApiHttpsHost", emulated_usb_devices.skylander_api_https_host);
+	emulated_usb_devices.skylander_api_https_port = usbdevices.get("SkylanderApiHttpsPort", emulated_usb_devices.skylander_api_https_port);
+	emulated_usb_devices.skylander_api_storage_path = usbdevices.get("SkylanderApiStoragePath", emulated_usb_devices.skylander_api_storage_path);
+	emulated_usb_devices.skylander_api_https_cert_path = usbdevices.get("SkylanderApiHttpsCertPath", emulated_usb_devices.skylander_api_https_cert_path);
+	emulated_usb_devices.skylander_api_https_key_path = usbdevices.get("SkylanderApiHttpsKeyPath", emulated_usb_devices.skylander_api_https_key_path);
 
 	return parser;
 }
@@ -453,6 +463,16 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	usbdevices.set("EmulateSkylanderPortal", emulated_usb_devices.emulate_skylander_portal.GetValue());
 	usbdevices.set("EmulateInfinityBase", emulated_usb_devices.emulate_infinity_base.GetValue());
 	usbdevices.set("EmulateDimensionsToypad", emulated_usb_devices.emulate_dimensions_toypad.GetValue());
+	usbdevices.set("SkylanderApiEnabled", emulated_usb_devices.skylander_api_enabled.GetValue());
+	usbdevices.set("SkylanderApiHttpEnabled", emulated_usb_devices.skylander_api_http_enabled.GetValue());
+	usbdevices.set("SkylanderApiHttpHost", emulated_usb_devices.skylander_api_http_host.GetValue().c_str());
+	usbdevices.set("SkylanderApiHttpPort", emulated_usb_devices.skylander_api_http_port.GetValue());
+	usbdevices.set("SkylanderApiHttpsEnabled", emulated_usb_devices.skylander_api_https_enabled.GetValue());
+	usbdevices.set("SkylanderApiHttpsHost", emulated_usb_devices.skylander_api_https_host.GetValue().c_str());
+	usbdevices.set("SkylanderApiHttpsPort", emulated_usb_devices.skylander_api_https_port.GetValue());
+	usbdevices.set("SkylanderApiStoragePath", emulated_usb_devices.skylander_api_storage_path.GetValue().c_str());
+	usbdevices.set("SkylanderApiHttpsCertPath", emulated_usb_devices.skylander_api_https_cert_path.GetValue().c_str());
+	usbdevices.set("SkylanderApiHttpsKeyPath", emulated_usb_devices.skylander_api_https_key_path.GetValue().c_str());
 
 	return config;
 }

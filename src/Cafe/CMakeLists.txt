@@ -431,6 +431,10 @@ add_library(CemuCafe
   OS/libs/nsyshid/Infinity.h
   OS/libs/nsyshid/Skylander.cpp
   OS/libs/nsyshid/Skylander.h
+  OS/libs/nsyshid/SkylanderPortalManager.cpp
+  OS/libs/nsyshid/SkylanderPortalManager.h
+  OS/libs/nsyshid/SkylanderApiServer.cpp
+  OS/libs/nsyshid/SkylanderApiServer.h
   OS/libs/nsyshid/SkylanderXbox360.cpp
   OS/libs/nsyshid/SkylanderXbox360.h
   OS/libs/nsyshid/g721/g721.cpp
@@ -638,6 +642,7 @@ if (ENABLE_LIBUSB)
 endif()
 
 target_include_directories(CemuCafe PUBLIC "../")
+target_include_directories(CemuCafe PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
 
 if (glslang_VERSION VERSION_LESS "15.0.0")
 	set(glslang_target "glslang::SPIRV")

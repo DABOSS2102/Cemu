@@ -38,6 +38,7 @@
 
 #include "wxgui/TitleManager.h"
 #include "wxgui/EmulatedUSBDevices/EmulatedUSBDeviceFrame.h"
+#include "Cafe/OS/libs/nsyshid/SkylanderApiServer.h"
 
 #include "Cafe/CafeSystem.h"
 
@@ -371,6 +372,7 @@ MainWindow::MainWindow()
 	m_timer->Start(500);
 
 	LoadSettings();
+	nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
 
 	#ifdef ENABLE_DISCORD_RPC
 	if (GetWxGUIConfig().use_discord_presence)
@@ -455,6 +457,7 @@ void MainWindow::OnClose(wxCloseEvent& event)
 		m_restored_size = GetSize();
 
 	SaveSettings();
+	nsyshid::SkylanderApiServer::GetInstance().Stop();
 	m_timer->Stop();
 
 	event.Skip();

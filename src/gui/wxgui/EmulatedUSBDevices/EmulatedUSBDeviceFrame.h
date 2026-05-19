@@ -10,10 +10,14 @@
 
 class wxBoxSizer;
 class wxCheckBox;
+class wxDirPickerCtrl;
+class wxFilePickerCtrl;
 class wxFlexGridSizer;
 class wxNotebook;
 class wxPanel;
+class wxSpinCtrl;
 class wxStaticBox;
+class wxStaticText;
 class wxString;
 class wxTextCtrl;
 
@@ -26,12 +30,22 @@ class EmulatedUSBDeviceFrame : public wxFrame
 
   private:
 	wxCheckBox* m_emulatePortal;
+	wxCheckBox* m_enableSkylanderApi;
+	wxCheckBox* m_enableSkylanderHttp;
+	wxCheckBox* m_enableSkylanderHttps;
+	wxTextCtrl* m_skylanderHttpHost;
+	wxTextCtrl* m_skylanderHttpsHost;
+	wxSpinCtrl* m_skylanderHttpPort;
+	wxSpinCtrl* m_skylanderHttpsPort;
+	wxDirPickerCtrl* m_skylanderFolderPicker;
+	wxFilePickerCtrl* m_skylanderHttpsCertPicker;
+	wxFilePickerCtrl* m_skylanderHttpsKeyPicker;
+	wxStaticText* m_skylanderApiStatus;
 	wxCheckBox* m_emulateBase;
 	wxCheckBox* m_emulateToypad;
 	std::array<wxTextCtrl*, nsyshid::MAX_SKYLANDERS> m_skylanderSlots;
 	std::array<wxTextCtrl*, nsyshid::MAX_FIGURES> m_infinitySlots;
 	std::array<wxTextCtrl*, 7> m_dimensionSlots;
-	std::array<std::optional<std::tuple<uint8, uint16, uint16>>, nsyshid::MAX_SKYLANDERS> m_skySlots;
 	std::array<std::optional<uint32>, 7> m_dimSlots;
 
 	wxPanel* AddSkylanderPage(wxNotebook* notebook);
@@ -45,6 +59,7 @@ class EmulatedUSBDeviceFrame : public wxFrame
 	void CreateSkylander(uint8 slot);
 	void ClearSkylander(uint8 slot);
 	void UpdateSkylanderEdits();
+	void UpdateSkylanderApiStatus();
 	void LoadFigure(uint8 slot);
 	void LoadFigurePath(uint8 slot, wxString path);
 	void CreateFigure(uint8 slot);
@@ -59,7 +74,7 @@ class EmulatedUSBDeviceFrame : public wxFrame
 class CreateSkylanderDialog : public wxDialog
 {
   public:
-	explicit CreateSkylanderDialog(wxWindow* parent, uint8 slot);
+	explicit CreateSkylanderDialog(wxWindow* parent, uint8 slot, const fs::path& defaultPath);
 	wxString GetFilePath() const;
 
   protected:
