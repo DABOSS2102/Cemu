@@ -3,6 +3,7 @@
 #include <regex>
 #include <sstream>
 #include <unordered_map>
+#include <cstring>
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
@@ -15,7 +16,8 @@ namespace nsyshid
 {
 	namespace
 	{
-		constexpr size_t kMaxRequestBodySize = 10 * 1024 * 1024;
+		constexpr size_t kMaxRequestBodySize = 1024 * 1024;
+		constexpr size_t kMaxRequestHeaderSize = 64 * 1024;
 		const std::regex kSlotRegex(R"(^/api/skylanders/slots/([0-9]{1,2})(?:/(load|create))?$)");
 	}
 
@@ -213,10 +215,21 @@ namespace nsyshid
 	template <typename TStream>
 	SkylanderApiServer::HttpResponse SkylanderApiServer::ReadAndHandleRequest(TStream& stream)
 	{
-		boost::asio::streambuf requestBuf;
-		boost::asio::read_until(stream, requestBuf, "\r\n\r\n");
+		std::string headerAndMaybeBody;
+		try
+		{
+			boost::asio::read_until(stream, boost::asio::dynamic_buffer(headerAndMaybeBody, kMaxRequestHeaderSize), "\r\n\r\n");
+		}
+		catch (const std::length_error&)
+		{
+			return MakeJsonError(413, "Request headers too large");
+		}
 
-		std::istream requestStream(&requestBuf);
+		const size_t headerEndPos = headerAndMaybeBody.find("\r\n\r\n");
+		if (headerEndPos == std::string::npos)
+			return MakeJsonError(400, "Malformed HTTP headers");
+
+		std::istringstream requestStream(headerAndMaybeBody.substr(0, headerEndPos + 4));
 		std::string requestLine;
 		std::getline(requestStream, requestLine);
 		if (!requestLine.empty() && requestLine.back() == '\r')
@@ -273,9 +286,9 @@ namespace nsyshid
 		if (contentLength > 0)
 		{
 			body.resize(contentLength);
-			size_t alreadyBuffered = std::min(contentLength, (size_t)requestBuf.size());
+			size_t alreadyBuffered = std::min(contentLength, headerAndMaybeBody.size() - (headerEndPos + 4));
 			if (alreadyBuffered > 0)
-				requestStream.read(body.data(), (std::streamsize)alreadyBuffered);
+				memcpy(body.data(), headerAndMaybeBody.data() + headerEndPos + 4, alreadyBuffered);
 			if (alreadyBuffered < contentLength)
 			{
 				boost::asio::read(stream, boost::asio::buffer(body.data() + alreadyBuffered, contentLength - alreadyBuffered));
