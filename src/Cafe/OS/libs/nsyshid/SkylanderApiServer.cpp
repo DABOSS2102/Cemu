@@ -259,15 +259,16 @@ namespace nsyshid
 		{
 			try
 			{
-				contentLength = (size_t)std::stoull(contentLen);
+				const auto parsedLength = std::stoull(contentLen);
+				if (parsedLength > kMaxRequestBodySize)
+					return MakeJsonError(413, "Payload too large");
+				contentLength = (size_t)parsedLength;
 			}
 			catch (...)
 			{
 				return MakeJsonError(400, "Invalid Content-Length");
 			}
 		}
-		if (contentLength > kMaxRequestBodySize)
-			return MakeJsonError(413, "Payload too large");
 
 		if (contentLength > 0)
 		{
@@ -562,7 +563,15 @@ namespace nsyshid
 		std::match_results<std::string_view::const_iterator> match;
 		if (std::regex_match(path.begin(), path.end(), match, kSlotRegex))
 		{
-			const auto slotNum = std::stoi(std::string(match[1].first, match[1].second));
+			int slotNum = 0;
+			try
+			{
+				slotNum = std::stoi(std::string(match[1].first, match[1].second));
+			}
+			catch (...)
+			{
+				return MakeJsonError(400, "Invalid slot number");
+			}
 			if (slotNum >= MAX_SKYLANDERS)
 				return MakeJsonError(400, "Invalid slot index");
 			const uint8 slot = (uint8)slotNum;

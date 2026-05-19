@@ -121,12 +121,24 @@ namespace nsyshid
 		}
 
 		const fs::path candidate = (root / relative).lexically_normal();
-		if (!IsPathWithin(root, candidate))
+		const fs::path canonicalRoot = fs::weakly_canonical(root, ec);
+		if (ec)
+		{
+			error = fmt::format("Failed to canonicalize storage root: {}", ec.message());
+			return false;
+		}
+		const fs::path canonicalCandidate = fs::weakly_canonical(candidate, ec);
+		if (ec)
+		{
+			error = fmt::format("Failed to canonicalize file path: {}", ec.message());
+			return false;
+		}
+		if (!IsPathWithin(canonicalRoot, canonicalCandidate))
 		{
 			error = "Path traversal outside storage folder is not allowed";
 			return false;
 		}
-		resolved = candidate;
+		resolved = canonicalCandidate;
 		return true;
 	}
 
