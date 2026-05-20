@@ -631,9 +631,7 @@ namespace nsyshid
 				if (offset + 4 > packet.size())
 					continue;
 				const uint16 queryType = ((uint16)packet[offset] << 8) | packet[offset + 1];
-				offset += 2;
-				const uint16 queryClass = ((uint16)packet[offset] << 8) | packet[offset + 1];
-				(void)queryClass;
+				offset += 4;
 
 				const bool typeMatches = queryType == 12 || queryType == 255;
 				if (!typeMatches || queryName != kServiceType)
