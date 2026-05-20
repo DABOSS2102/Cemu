@@ -473,7 +473,7 @@ CreateSkylanderDialog::CreateSkylanderDialog(wxWindow* parent, uint8 slot, const
 	auto* buttonRow = new wxBoxSizer(wxHORIZONTAL);
 
 	auto* createButton = new wxButton(this, wxID_ANY, _("Create"));
-	createButton->Bind(wxEVT_BUTTON, [editId, editVar, this](wxCommandEvent&) {
+	createButton->Bind(wxEVT_BUTTON, [editId, editVar, this, defaultPath](wxCommandEvent&) {
 		long longSkyId;
 		if (!editId->GetValue().ToLong(&longSkyId) || longSkyId > 0xFFFF)
 		{
