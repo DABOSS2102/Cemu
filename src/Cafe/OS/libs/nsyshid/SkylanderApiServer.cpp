@@ -66,10 +66,7 @@ namespace nsyshid
 				name.append((const char*)packet.data() + current, len);
 				current += len;
 			}
-			if (!jumped)
-				offset = current;
-			else
-				offset = current;
+			offset = current;
 			outName = std::move(name);
 			return true;
 		}
@@ -363,8 +360,14 @@ namespace nsyshid
 				statusParts.emplace_back(fmt::format("HTTP {}:{}", usbCfg.skylander_api_http_host.GetValue(), usbCfg.skylander_api_http_port.GetValue()));
 			if (enableHttps)
 				statusParts.emplace_back(fmt::format("HTTPS {}:{}", usbCfg.skylander_api_https_host.GetValue(), usbCfg.skylander_api_https_port.GetValue()));
-			statusParts.emplace_back(fmt::format("mDNS {} on {}", kServiceType, primaryPort));
-			statusParts.emplace_back(fmt::format("UDP discovery port {}", kUdpDiscoveryPort));
+			if (m_mdnsRunning)
+				statusParts.emplace_back(fmt::format("mDNS {} on {}", kServiceType, primaryPort));
+			else
+				statusParts.emplace_back("mDNS unavailable");
+			if (m_udpDiscoveryRunning)
+				statusParts.emplace_back(fmt::format("UDP discovery port {}", kUdpDiscoveryPort));
+			else
+				statusParts.emplace_back("UDP discovery unavailable");
 			m_discoveryStatus = fmt::format("{} (primary {}:{})",
 											discoveryResult.empty() ? "Discovery unavailable" : discoveryResult,
 											primaryHttps ? "https" : "http", primaryPort);
@@ -692,15 +695,15 @@ namespace nsyshid
 				WriteU16(response, 1);
 				WriteU16(response, 1);
 				WriteU32(response, 120);
-				boost::asio::ip::address_v4 addressV4 = boost::asio::ip::address_v4::loopback();
+				boost::asio::ip::address_v4 responseAddressV4 = boost::asio::ip::address_v4::loopback();
 				boost::system::error_code parseEc;
 				if (!localAddress.empty())
 				{
 					const auto parsed = boost::asio::ip::make_address_v4(localAddress, parseEc);
 					if (!parseEc)
-						addressV4 = parsed;
+						responseAddressV4 = parsed;
 				}
-				const auto bytes = addressV4.to_bytes();
+				const auto bytes = responseAddressV4.to_bytes();
 				WriteU16(response, 4);
 				response.append((const char*)bytes.data(), bytes.size());
 
