@@ -141,7 +141,11 @@ namespace nsyshid
 				const uint16 port = usbCfg.skylander_api_http_port.GetValue();
 				m_httpIoContext = std::make_unique<boost::asio::io_context>();
 				boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(host), port);
-				m_httpAcceptor = std::make_unique<boost::asio::ip::tcp::acceptor>(*m_httpIoContext, endpoint);
+				m_httpAcceptor = std::make_unique<boost::asio::ip::tcp::acceptor>(*m_httpIoContext);
+				m_httpAcceptor->open(endpoint.protocol());
+				m_httpAcceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+				m_httpAcceptor->bind(endpoint);
+				m_httpAcceptor->listen(boost::asio::socket_base::max_listen_connections);
 				m_httpRunning = true;
 				m_httpThread = std::thread([this]() { HttpAcceptLoop(); });
 			}
@@ -154,7 +158,11 @@ namespace nsyshid
 				m_httpsSslContext->use_certificate_chain_file(httpsCertPath);
 				m_httpsSslContext->use_private_key_file(httpsKeyPath, boost::asio::ssl::context::pem);
 				boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(host), port);
-				m_httpsAcceptor = std::make_unique<boost::asio::ip::tcp::acceptor>(*m_httpsIoContext, endpoint);
+				m_httpsAcceptor = std::make_unique<boost::asio::ip::tcp::acceptor>(*m_httpsIoContext);
+				m_httpsAcceptor->open(endpoint.protocol());
+				m_httpsAcceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+				m_httpsAcceptor->bind(endpoint);
+				m_httpsAcceptor->listen(boost::asio::socket_base::max_listen_connections);
 				m_httpsRunning = true;
 				m_httpsThread = std::thread([this]() { HttpsAcceptLoop(); });
 			}

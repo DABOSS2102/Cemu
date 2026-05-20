@@ -536,10 +536,10 @@ struct CemuConfig
 		ConfigValue<bool> emulate_dimensions_toypad{false};
 		ConfigValue<bool> skylander_api_enabled{false};
 		ConfigValue<bool> skylander_api_http_enabled{true};
-		ConfigValue<std::string> skylander_api_http_host{"127.0.0.1"};
+		ConfigValue<std::string> skylander_api_http_host{"0.0.0.0"};
 		ConfigValue<uint16> skylander_api_http_port{28777};
 		ConfigValue<bool> skylander_api_https_enabled{false};
-		ConfigValue<std::string> skylander_api_https_host{"127.0.0.1"};
+		ConfigValue<std::string> skylander_api_https_host{"0.0.0.0"};
 		ConfigValue<uint16> skylander_api_https_port{28778};
 		ConfigValue<std::string> skylander_api_storage_path{};
 		ConfigValue<std::string> skylander_api_https_cert_path{};
