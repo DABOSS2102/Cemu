@@ -256,7 +256,14 @@ namespace nsyshid
 		}
 		if (enableHttps && (httpsCertPath.empty() || httpsKeyPath.empty()))
 		{
-			error = "HTTPS enabled but cert/key path is empty";
+			const bool certMissing = httpsCertPath.empty();
+			const bool keyMissing = httpsKeyPath.empty();
+			if (certMissing && keyMissing)
+				error = "HTTPS enabled but cert and key paths are empty";
+			else if (certMissing)
+				error = "HTTPS enabled but cert path is empty";
+			else
+				error = "HTTPS enabled but key path is empty";
 			return false;
 		}
 
@@ -583,7 +590,12 @@ namespace nsyshid
 				sslStream.handshake(boost::asio::ssl::stream_base::server, ec);
 				if (ec)
 				{
-					cemuLog_log(LogType::Force, "Skylander API HTTPS handshake failed: {}", ec.message());
+					boost::system::error_code endpointEc;
+					const auto remoteEndpoint = sslStream.lowest_layer().remote_endpoint(endpointEc);
+					if (!endpointEc)
+						cemuLog_log(LogType::Force, "Skylander API HTTPS handshake failed from {}:{}: {}", remoteEndpoint.address().to_string(), remoteEndpoint.port(), ec.message());
+					else
+						cemuLog_log(LogType::Force, "Skylander API HTTPS handshake failed: {}", ec.message());
 					continue;
 				}
 				auto response = ReadAndHandleRequest(sslStream);
