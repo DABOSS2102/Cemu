@@ -46,10 +46,15 @@ public:
 			return element->Int64Text(default_value);
 		else if constexpr (std::is_same_v<T, uint64>) // doesnt support real uint64...
 			return (uint64)element->Int64Text((sint64)default_value);
-		else if constexpr (std::is_same_v<T, const char*> || std::is_same_v<T, std::string> || HasConstCharConstructor<T>)
+		else if constexpr (std::is_same_v<T, const char*>)
 		{
 			const char* text = element->GetText();
 			return text ? text : default_value;
+		}
+		else if constexpr (std::is_same_v<T, std::string> || HasConstCharConstructor<T>)
+		{
+			const char* text = element->GetText();
+			return text ? T(text) : default_value;
 		}
 		
 		return default_value;
@@ -88,10 +93,15 @@ public:
 			return m_current_element->Int64Attribute(name, default_value);
 		else if constexpr (std::is_same_v<T, uint64>) // doesnt support real uint64...
 			return (uint64)m_current_element->Int64Attribute(name, (sint64)default_value);
-		else if constexpr (std::is_same_v<T, const char*> || std::is_same_v<T, std::string>)
+		else if constexpr (std::is_same_v<T, const char*>)
 		{
 			const char* text = m_current_element->Attribute(name);
 			return text ? text : default_value;
+		}
+		else if constexpr (std::is_same_v<T, std::string> || HasConstCharConstructor<T>)
+		{
+			const char* text = m_current_element->Attribute(name);
+			return text ? T(text) : default_value;
 		}
 
 		return default_value;
