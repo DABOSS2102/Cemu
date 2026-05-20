@@ -514,7 +514,9 @@ namespace nsyshid
 		if (contentLength > 0)
 		{
 			body.resize(contentLength);
-			size_t alreadyBuffered = std::min(contentLength, headerAndMaybeBody.size() - (headerEndPos + 4));
+			size_t alreadyBuffered = 0;
+			if (headerAndMaybeBody.size() > (headerEndPos + 4))
+				alreadyBuffered = std::min(contentLength, headerAndMaybeBody.size() - (headerEndPos + 4));
 			if (alreadyBuffered > 0)
 				memcpy(body.data(), headerAndMaybeBody.data() + headerEndPos + 4, alreadyBuffered);
 			if (alreadyBuffered < contentLength)
