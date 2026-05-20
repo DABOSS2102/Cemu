@@ -19,7 +19,6 @@
 #include <wx/combobox.h>
 #include <wx/checkbox.h>
 #include <wx/combobox.h>
-#include <wx/dirpicker.h>
 #include <wx/filedlg.h>
 #include <wx/filepicker.h>
 #include <wx/log.h>
