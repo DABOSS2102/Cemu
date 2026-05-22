@@ -24,83 +24,6 @@ namespace nsyshid
 		constexpr size_t kMaxRequestBodySize = 1024 * 1024;
 		constexpr size_t kMaxRequestHeaderSize = 64 * 1024;
 		const std::regex kSlotRegex(R"(^/api/skylanders/slots/([0-9]{1,2})(?:/(load|create))?$)");
-		constexpr uint16 kMdnsPort = 5353;
-		constexpr uint16 kUdpDiscoveryPort = 28779;
-		constexpr std::string_view kMdnsMulticastAddress = "224.0.0.251";
-		constexpr uint32 kMdnsTtlSeconds = 120;
-		constexpr std::string_view kServiceType = "_cemu-skylander._tcp.local";
-		constexpr std::string_view kServiceInstance = "Cemu Skylander API._cemu-skylander._tcp.local";
-		constexpr std::string_view kServiceHost = "cemu-skylander.local";
-		constexpr std::string_view kUdpDiscoveryMagic = "CEMU_SKYLANDER_DISCOVERY_V1";
-
-		bool ParseDnsName(const std::vector<uint8>& packet, size_t& offset, std::string& outName, int depth = 0)
-		{
-			if (depth > 8)
-				return false;
-			std::string name;
-			size_t current = offset;
-			while (current < packet.size())
-			{
-				const uint8 len = packet[current++];
-				if ((len & 0xC0) == 0xC0)
-				{
-					if (current >= packet.size())
-						return false;
-					const uint16 pointer = ((uint16)(len & 0x3F) << 8) | packet[current++];
-					if (pointer >= packet.size())
-						return false;
-					size_t ptrOffset = pointer;
-					std::string pointedName;
-					if (!ParseDnsName(packet, ptrOffset, pointedName, depth + 1))
-						return false;
-					if (!name.empty() && !pointedName.empty())
-						name += ".";
-					name += pointedName;
-					break;
-				}
-				if (len == 0)
-					break;
-				if (current + len > packet.size())
-					return false;
-				if (!name.empty())
-					name += ".";
-				name.append((const char*)packet.data() + current, len);
-				current += len;
-			}
-			offset = current;
-			outName = std::move(name);
-			return true;
-		}
-
-		void WriteU16(std::string& out, uint16 value)
-		{
-			out.push_back((char)((value >> 8) & 0xFF));
-			out.push_back((char)(value & 0xFF));
-		}
-
-		void WriteU32(std::string& out, uint32 value)
-		{
-			out.push_back((char)((value >> 24) & 0xFF));
-			out.push_back((char)((value >> 16) & 0xFF));
-			out.push_back((char)((value >> 8) & 0xFF));
-			out.push_back((char)(value & 0xFF));
-		}
-
-		void WriteDnsName(std::string& out, std::string_view name)
-		{
-			size_t start = 0;
-			while (start < name.size())
-			{
-				size_t end = name.find('.', start);
-				if (end == std::string_view::npos)
-					end = name.size();
-				const size_t len = end - start;
-				out.push_back((char)len);
-				out.append(name.substr(start, len));
-				start = end + 1;
-			}
-			out.push_back('\0');
-		}
 
 		std::vector<std::string> GetLocalIpv4Addresses()
 		{
@@ -133,20 +56,6 @@ namespace nsyshid
 			return std::vector<std::string>(uniqueAddresses.begin(), uniqueAddresses.end());
 		}
 
-		void AppendARecord(std::string& out, std::string_view hostName, std::string_view addressText)
-		{
-			boost::system::error_code ec;
-			const auto parsedAddress = boost::asio::ip::make_address_v4(std::string(addressText), ec);
-			if (ec)
-				return;
-			WriteDnsName(out, hostName);
-			WriteU16(out, 1);
-			WriteU16(out, 1);
-			WriteU32(out, kMdnsTtlSeconds);
-			const auto bytes = parsedAddress.to_bytes();
-			WriteU16(out, 4);
-			out.append((const char*)bytes.data(), bytes.size());
-		}
 	}
 
 	SkylanderApiServer& SkylanderApiServer::GetInstance()
@@ -172,6 +81,29 @@ namespace nsyshid
 		return m_statusText;
 	}
 
+	std::string SkylanderApiServer::GetHttpConnectUrl() const
+	{
+		const auto& cfg = GetConfig().emulated_usb_devices;
+		const uint16 port = cfg.skylander_api_http_port.GetValue();
+		if (port == 0)
+			return {};
+
+		std::string address;
+		{
+			std::lock_guard lock(m_mutex);
+			address = m_localAddress;
+		}
+		if (address.empty())
+		{
+			const auto host = cfg.skylander_api_http_host.GetValue();
+			if (!host.empty() && host != "0.0.0.0")
+				address = host;
+		}
+		if (address.empty())
+			return {};
+		return fmt::format("http://{}:{}", address, port);
+	}
+
 	void SkylanderApiServer::SetStatusText(std::string statusText)
 	{
 		std::lock_guard lock(m_mutex);
@@ -183,8 +115,6 @@ namespace nsyshid
 		m_stopRequested = true;
 		std::thread httpThread;
 		std::thread httpsThread;
-		std::thread mdnsThread;
-		std::thread udpDiscoveryThread;
 		{
 			std::lock_guard lock(m_mutex);
 			if (m_httpAcceptor)
@@ -197,56 +127,32 @@ namespace nsyshid
 				boost::system::error_code ec;
 				m_httpsAcceptor->close(ec);
 			}
-			if (m_mdnsSocket)
-			{
-				boost::system::error_code ec;
-				m_mdnsSocket->close(ec);
-			}
-			if (m_udpDiscoverySocket)
-			{
-				boost::system::error_code ec;
-				m_udpDiscoverySocket->close(ec);
-			}
 			if (m_httpIoContext)
 				m_httpIoContext->stop();
 			if (m_httpsIoContext)
 				m_httpsIoContext->stop();
-			if (m_discoveryIoContext)
-				m_discoveryIoContext->stop();
 
 			httpThread = std::move(m_httpThread);
 			httpsThread = std::move(m_httpsThread);
-			mdnsThread = std::move(m_mdnsThread);
-			udpDiscoveryThread = std::move(m_udpDiscoveryThread);
 		}
 		if (httpThread.joinable())
 			httpThread.join();
 		if (httpsThread.joinable())
 			httpsThread.join();
-		if (mdnsThread.joinable())
-			mdnsThread.join();
-		if (udpDiscoveryThread.joinable())
-			udpDiscoveryThread.join();
 
 		{
 			std::lock_guard lock(m_mutex);
 			m_httpAcceptor.reset();
 			m_httpsAcceptor.reset();
-			m_mdnsSocket.reset();
-			m_udpDiscoverySocket.reset();
 			m_httpIoContext.reset();
 			m_httpsIoContext.reset();
-			m_discoveryIoContext.reset();
 			m_httpsSslContext.reset();
 			m_httpRunning = false;
 			m_httpsRunning = false;
-			m_mdnsRunning = false;
-			m_udpDiscoveryRunning = false;
 			m_primaryPort = 0;
 			m_primaryHttps = false;
 			m_localAddress.clear();
 			m_localAddresses.clear();
-			m_discoveryStatus = "Discovery stopped";
 			m_statusText = "Stopped";
 		}
 	}
@@ -275,38 +181,15 @@ namespace nsyshid
 			return true;
 		}
 
-		const bool enableHttp = usbCfg.skylander_api_http_enabled.GetValue();
-		const bool enableHttps = usbCfg.skylander_api_https_enabled.GetValue();
-		const auto httpsCertPath = usbCfg.skylander_api_https_cert_path.GetValue();
-		const auto httpsKeyPath = usbCfg.skylander_api_https_key_path.GetValue();
-		if (!enableHttp && !enableHttps)
-		{
-			error = "API enabled but both HTTP and HTTPS are disabled";
-			return false;
-		}
-		if (enableHttps && (httpsCertPath.empty() || httpsKeyPath.empty()))
-		{
-			const bool certMissing = httpsCertPath.empty();
-			const bool keyMissing = httpsKeyPath.empty();
-			if (certMissing && keyMissing)
-				error = "HTTPS enabled but cert and key paths are empty";
-			else if (certMissing)
-				error = "HTTPS enabled but cert path is empty";
-			else
-				error = "HTTPS enabled but key path is empty";
-			return false;
-		}
+		const bool enableHttp = true;
+		const bool enableHttps = false;
 
 		m_stopRequested = false;
 		try
 		{
-			m_discoveryIoContext = std::make_unique<boost::asio::io_context>();
-			m_mdnsSocket = std::make_unique<boost::asio::ip::udp::socket>(*m_discoveryIoContext);
-			m_udpDiscoverySocket = std::make_unique<boost::asio::ip::udp::socket>(*m_discoveryIoContext);
-
 			if (enableHttp)
 			{
-				const auto host = usbCfg.skylander_api_http_host.GetValue();
+				const std::string host = "0.0.0.0";
 				const uint16 port = usbCfg.skylander_api_http_port.GetValue();
 				m_httpIoContext = std::make_unique<boost::asio::io_context>();
 				boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(host), port);
@@ -324,8 +207,6 @@ namespace nsyshid
 				const uint16 port = usbCfg.skylander_api_https_port.GetValue();
 				m_httpsIoContext = std::make_unique<boost::asio::io_context>();
 				m_httpsSslContext = std::make_unique<boost::asio::ssl::context>(boost::asio::ssl::context::tls_server);
-				m_httpsSslContext->use_certificate_chain_file(httpsCertPath);
-				m_httpsSslContext->use_private_key_file(httpsKeyPath, boost::asio::ssl::context::pem);
 				boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(host), port);
 				m_httpsAcceptor = std::make_unique<boost::asio::ip::tcp::acceptor>(*m_httpsIoContext);
 				m_httpsAcceptor->open(endpoint.protocol());
@@ -353,65 +234,15 @@ namespace nsyshid
 			m_localAddresses = localAddresses;
 			m_localAddress = m_localAddresses.empty() ? "" : m_localAddresses.front();
 
-			std::string discoveryResult;
-			try
-			{
-				boost::asio::ip::udp::endpoint mdnsListenEndpoint(boost::asio::ip::udp::v4(), kMdnsPort);
-				m_mdnsSocket->open(mdnsListenEndpoint.protocol());
-				m_mdnsSocket->set_option(boost::asio::ip::udp::socket::reuse_address(true));
-				m_mdnsSocket->bind(mdnsListenEndpoint);
-				m_mdnsSocket->set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::make_address_v4(std::string(kMdnsMulticastAddress))));
-				m_mdnsRunning = true;
-				m_mdnsThread = std::thread([this]() { MdnsLoop(); });
-				discoveryResult += "mDNS on";
-			}
-			catch (const std::exception& ex)
-			{
-				discoveryResult += fmt::format("mDNS unavailable ({})", ex.what());
-				m_mdnsRunning = false;
-			}
-
-			try
-			{
-				boost::asio::ip::udp::endpoint udpDiscoveryEndpoint(boost::asio::ip::udp::v4(), kUdpDiscoveryPort);
-				m_udpDiscoverySocket->open(udpDiscoveryEndpoint.protocol());
-				m_udpDiscoverySocket->set_option(boost::asio::ip::udp::socket::reuse_address(true));
-				m_udpDiscoverySocket->set_option(boost::asio::socket_base::broadcast(true));
-				m_udpDiscoverySocket->bind(udpDiscoveryEndpoint);
-				m_udpDiscoveryRunning = true;
-				m_udpDiscoveryThread = std::thread([this]() { UdpDiscoveryLoop(); });
-				if (!discoveryResult.empty())
-					discoveryResult += ", ";
-				discoveryResult += "UDP fallback on";
-			}
-			catch (const std::exception& ex)
-			{
-				if (!discoveryResult.empty())
-					discoveryResult += ", ";
-				discoveryResult += fmt::format("UDP fallback unavailable ({})", ex.what());
-				m_udpDiscoveryRunning = false;
-			}
-
 			std::vector<std::string> statusParts;
 			if (enableHttp)
-				statusParts.emplace_back(fmt::format("HTTP {}:{}", usbCfg.skylander_api_http_host.GetValue(), usbCfg.skylander_api_http_port.GetValue()));
+				statusParts.emplace_back(fmt::format("HTTP {}:{}", "0.0.0.0", usbCfg.skylander_api_http_port.GetValue()));
 			if (enableHttps)
 				statusParts.emplace_back(fmt::format("HTTPS {}:{}", usbCfg.skylander_api_https_host.GetValue(), usbCfg.skylander_api_https_port.GetValue()));
 			if (!m_localAddress.empty())
 				statusParts.emplace_back(fmt::format("Connect {}://{}:{}", primaryHttps ? "https" : "http", m_localAddress, primaryPort));
 			else
 				statusParts.emplace_back(fmt::format("Connect {}://<lan-ip>:{}", primaryHttps ? "https" : "http", primaryPort));
-			if (m_mdnsRunning)
-				statusParts.emplace_back(fmt::format("mDNS {} on {}", kServiceType, primaryPort));
-			else
-				statusParts.emplace_back("mDNS unavailable");
-			if (m_udpDiscoveryRunning)
-				statusParts.emplace_back(fmt::format("UDP discovery port {}", kUdpDiscoveryPort));
-			else
-				statusParts.emplace_back("UDP discovery unavailable");
-			m_discoveryStatus = fmt::format("{} (primary {}:{})",
-											discoveryResult.empty() ? "Discovery unavailable" : discoveryResult,
-											primaryHttps ? "https" : "http", primaryPort);
 			std::string status = "Running (";
 			for (size_t i = 0; i < statusParts.size(); ++i)
 			{
@@ -647,191 +478,20 @@ namespace nsyshid
 		m_httpsRunning = false;
 	}
 
-	void SkylanderApiServer::MdnsLoop()
-	{
-		try
-		{
-			std::array<uint8, 1500> buffer{};
-			while (!m_stopRequested.load())
-			{
-				boost::asio::ip::udp::endpoint remoteEndpoint;
-				boost::system::error_code ec;
-				const size_t received = m_mdnsSocket->receive_from(boost::asio::buffer(buffer), remoteEndpoint, 0, ec);
-				if (ec)
-				{
-					if (m_stopRequested.load())
-						break;
-					continue;
-				}
-				if (received < 17)
-					continue;
-
-				std::vector<uint8> packet(buffer.begin(), buffer.begin() + received);
-				const uint16 flags = ((uint16)packet[2] << 8) | packet[3];
-				const uint16 qdCount = ((uint16)packet[4] << 8) | packet[5];
-				if ((flags & 0x8000) != 0 || qdCount == 0)
-					continue;
-
-				size_t offset = 12;
-				bool hasServiceQuery = false;
-				for (uint16 q = 0; q < qdCount; ++q)
-				{
-					std::string queryName;
-					if (!ParseDnsName(packet, offset, queryName))
-					{
-						hasServiceQuery = false;
-						break;
-					}
-					if (offset + 4 > packet.size())
-					{
-						hasServiceQuery = false;
-						break;
-					}
-					const uint16 queryType = ((uint16)packet[offset] << 8) | packet[offset + 1];
-					offset += 4;
-					const bool typeMatches = queryType == 12 || queryType == 255;
-					if (typeMatches && queryName == kServiceType)
-					{
-						hasServiceQuery = true;
-						break;
-					}
-				}
-
-				if (!hasServiceQuery)
-					continue;
-
-				uint16 primaryPort = 0;
-				bool primaryHttps = false;
-				std::string localAddress;
-				std::vector<std::string> localAddresses;
-				{
-					std::lock_guard lock(m_mutex);
-					primaryPort = m_primaryPort;
-					primaryHttps = m_primaryHttps;
-					localAddress = m_localAddress;
-					localAddresses = m_localAddresses;
-				}
-				if (primaryPort == 0)
-					continue;
-				if (localAddresses.empty() && !localAddress.empty())
-					localAddresses.push_back(localAddress);
-
-				std::string response;
-				WriteU16(response, ((uint16)packet[0] << 8) | packet[1]);
-				WriteU16(response, 0x8400);
-				WriteU16(response, 0);
-				WriteU16(response, (uint16)(3 + std::max<size_t>(1, localAddresses.size())));
-				WriteU16(response, 0);
-				WriteU16(response, 0);
-
-				WriteDnsName(response, kServiceType);
-				WriteU16(response, 12);
-				WriteU16(response, 1);
-				WriteU32(response, kMdnsTtlSeconds);
-				std::string ptrData;
-				WriteDnsName(ptrData, kServiceInstance);
-				WriteU16(response, (uint16)ptrData.size());
-				response += ptrData;
-
-				WriteDnsName(response, kServiceInstance);
-				WriteU16(response, 33);
-				WriteU16(response, 1);
-				WriteU32(response, kMdnsTtlSeconds);
-				std::string srvData;
-				WriteU16(srvData, 0);
-				WriteU16(srvData, 0);
-				WriteU16(srvData, primaryPort);
-				WriteDnsName(srvData, kServiceHost);
-				WriteU16(response, (uint16)srvData.size());
-				response += srvData;
-
-				WriteDnsName(response, kServiceInstance);
-				WriteU16(response, 16);
-				WriteU16(response, 1);
-				WriteU32(response, kMdnsTtlSeconds);
-				const std::string txtValue = fmt::format("scheme={}", primaryHttps ? "https" : "http");
-				std::string txtData;
-				txtData.push_back((char)txtValue.size());
-				txtData += txtValue;
-				WriteU16(response, (uint16)txtData.size());
-				response += txtData;
-
-				if (localAddresses.empty())
-					AppendARecord(response, kServiceHost, "127.0.0.1");
-				else
-				{
-					for (const auto& addr : localAddresses)
-						AppendARecord(response, kServiceHost, addr);
-				}
-
-				m_mdnsSocket->send_to(boost::asio::buffer(response), remoteEndpoint, 0, ec);
-				if (ec)
-					continue;
-			}
-		}
-		catch (const std::exception& ex)
-		{
-			SetStatusText(fmt::format("mDNS discovery failed: {}", ex.what()));
-		}
-
-		std::lock_guard lock(m_mutex);
-		m_mdnsRunning = false;
-	}
-
-	void SkylanderApiServer::UdpDiscoveryLoop()
-	{
-		try
-		{
-			std::array<char, 1024> buffer{};
-			while (!m_stopRequested.load())
-			{
-				boost::asio::ip::udp::endpoint remoteEndpoint;
-				boost::system::error_code ec;
-				const size_t received = m_udpDiscoverySocket->receive_from(boost::asio::buffer(buffer), remoteEndpoint, 0, ec);
-				if (ec)
-				{
-					if (m_stopRequested.load())
-						break;
-					continue;
-				}
-
-				std::string_view request(buffer.data(), received);
-				if (request != kUdpDiscoveryMagic)
-					continue;
-
-				const std::string response = BuildInfoJson();
-				m_udpDiscoverySocket->send_to(boost::asio::buffer(response), remoteEndpoint, 0, ec);
-			}
-		}
-		catch (const std::exception& ex)
-		{
-			SetStatusText(fmt::format("UDP discovery failed: {}", ex.what()));
-		}
-
-		std::lock_guard lock(m_mutex);
-		m_udpDiscoveryRunning = false;
-	}
-
 	std::string SkylanderApiServer::BuildInfoJson() const
 	{
 		const auto& cfg = GetConfig().emulated_usb_devices;
 		const auto status = GetStatusText();
-		bool mdnsRunning = false;
-		bool udpRunning = false;
 		bool primaryHttps = false;
 		uint16 primaryPort = 0;
 		std::string localAddress;
 		std::vector<std::string> localAddresses;
-		std::string discoveryStatus;
 		{
 			std::lock_guard lock(m_mutex);
-			mdnsRunning = m_mdnsRunning;
-			udpRunning = m_udpDiscoveryRunning;
 			primaryHttps = m_primaryHttps;
 			primaryPort = m_primaryPort;
 			localAddress = m_localAddress;
 			localAddresses = m_localAddresses;
-			discoveryStatus = m_discoveryStatus;
 		}
 		rapidjson::StringBuffer s;
 		rapidjson::Writer<rapidjson::StringBuffer> w(s);
@@ -842,23 +502,19 @@ namespace nsyshid
 		w.String(status.c_str(), (rapidjson::SizeType)status.size());
 		w.Key("version");
 		w.String(BUILD_VERSION_STRING);
-		w.Key("serviceType");
-		w.String(kServiceType.data(), (rapidjson::SizeType)kServiceType.size());
-		w.Key("serviceInstance");
-		w.String(kServiceInstance.data(), (rapidjson::SizeType)kServiceInstance.size());
 		w.Key("http");
 		w.StartObject();
 		w.Key("enabled");
-		w.Bool(cfg.skylander_api_http_enabled.GetValue());
+		w.Bool(true);
 		w.Key("host");
-		w.String(cfg.skylander_api_http_host.GetValue().c_str());
+		w.String("0.0.0.0");
 		w.Key("port");
 		w.Uint(cfg.skylander_api_http_port.GetValue());
 		w.EndObject();
 		w.Key("https");
 		w.StartObject();
 		w.Key("enabled");
-		w.Bool(cfg.skylander_api_https_enabled.GetValue());
+		w.Bool(false);
 		w.Key("host");
 		w.String(cfg.skylander_api_https_host.GetValue().c_str());
 		w.Key("port");
@@ -866,14 +522,6 @@ namespace nsyshid
 		w.EndObject();
 		w.Key("discovery");
 		w.StartObject();
-		w.Key("mdnsAdvertised");
-		w.Bool(mdnsRunning);
-		w.Key("udpFallback");
-		w.Bool(udpRunning);
-		w.Key("udpPort");
-		w.Uint(kUdpDiscoveryPort);
-		w.Key("udpProbe");
-		w.String(kUdpDiscoveryMagic.data(), (rapidjson::SizeType)kUdpDiscoveryMagic.size());
 		w.Key("primaryScheme");
 		w.String(primaryHttps ? "https" : "http");
 		w.Key("primaryPort");
@@ -895,8 +543,6 @@ namespace nsyshid
 		{
 			w.String("");
 		}
-		w.Key("summary");
-		w.String(discoveryStatus.c_str());
 		w.EndObject();
 		w.Key("capabilities");
 		w.StartArray();
@@ -905,9 +551,6 @@ namespace nsyshid
 		w.String("config");
 		w.String("slots");
 		w.String("catalog");
-		w.String("mdns-discovery");
-		w.String("udp-discovery-fallback");
-		w.String("https-optional");
 		w.EndArray();
 		w.EndObject();
 		return s.GetString();
@@ -923,28 +566,17 @@ namespace nsyshid
 		auto& cfg = GetConfig().emulated_usb_devices;
 		if (d.HasMember("apiEnabled") && d["apiEnabled"].IsBool())
 			cfg.skylander_api_enabled = d["apiEnabled"].GetBool();
-		if (d.HasMember("httpEnabled") && d["httpEnabled"].IsBool())
-			cfg.skylander_api_http_enabled = d["httpEnabled"].GetBool();
-		if (d.HasMember("httpsEnabled") && d["httpsEnabled"].IsBool())
-			cfg.skylander_api_https_enabled = d["httpsEnabled"].GetBool();
-		if (d.HasMember("httpHost") && d["httpHost"].IsString())
-			cfg.skylander_api_http_host = d["httpHost"].GetString();
-		if (d.HasMember("httpsHost") && d["httpsHost"].IsString())
-			cfg.skylander_api_https_host = d["httpsHost"].GetString();
+		cfg.skylander_api_http_enabled = true;
+		cfg.skylander_api_http_host = "0.0.0.0";
+		cfg.skylander_api_https_enabled = false;
 		if (d.HasMember("httpPort") && d["httpPort"].IsUint())
 			cfg.skylander_api_http_port = (uint16)d["httpPort"].GetUint();
-		if (d.HasMember("httpsPort") && d["httpsPort"].IsUint())
-			cfg.skylander_api_https_port = (uint16)d["httpsPort"].GetUint();
 		if (d.HasMember("storagePath") && d["storagePath"].IsString())
 		{
 			std::string storageError;
 			if (!SkylanderPortalManager::GetInstance().SetStorageFolderPath(_utf8ToPath(d["storagePath"].GetString()), storageError))
 				return MakeJsonError(400, storageError);
 		}
-		if (d.HasMember("httpsCertPath") && d["httpsCertPath"].IsString())
-			cfg.skylander_api_https_cert_path = d["httpsCertPath"].GetString();
-		if (d.HasMember("httpsKeyPath") && d["httpsKeyPath"].IsString())
-			cfg.skylander_api_https_key_path = d["httpsKeyPath"].GetString();
 
 		GetConfigHandle().Save();
 		ApplyConfig();
@@ -1018,23 +650,15 @@ namespace nsyshid
 			w.Key("apiEnabled");
 			w.Bool(cfg.skylander_api_enabled.GetValue());
 			w.Key("httpEnabled");
-			w.Bool(cfg.skylander_api_http_enabled.GetValue());
+			w.Bool(true);
 			w.Key("httpHost");
-			w.String(cfg.skylander_api_http_host.GetValue().c_str());
+			w.String("0.0.0.0");
 			w.Key("httpPort");
 			w.Uint(cfg.skylander_api_http_port.GetValue());
 			w.Key("httpsEnabled");
-			w.Bool(cfg.skylander_api_https_enabled.GetValue());
-			w.Key("httpsHost");
-			w.String(cfg.skylander_api_https_host.GetValue().c_str());
-			w.Key("httpsPort");
-			w.Uint(cfg.skylander_api_https_port.GetValue());
+			w.Bool(false);
 			w.Key("storagePath");
 			w.String(cfg.skylander_api_storage_path.GetValue().c_str());
-			w.Key("httpsCertPath");
-			w.String(cfg.skylander_api_https_cert_path.GetValue().c_str());
-			w.Key("httpsKeyPath");
-			w.String(cfg.skylander_api_https_key_path.GetValue().c_str());
 			w.EndObject();
 			return MakeJsonOk(s.GetString());
 		}

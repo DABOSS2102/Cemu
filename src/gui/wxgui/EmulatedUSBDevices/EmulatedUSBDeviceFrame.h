@@ -5,7 +5,6 @@
 
 #include <wx/dialog.h>
 #include <wx/frame.h>
-#include <wx/collpane.h>
 
 #include "Cafe/OS/libs/nsyshid/Infinity.h"
 #include "Cafe/OS/libs/nsyshid/Skylander.h"
@@ -13,7 +12,6 @@
 class wxBoxSizer;
 class wxCheckBox;
 class wxDirPickerCtrl;
-class wxFilePickerCtrl;
 class wxFlexGridSizer;
 class wxNotebook;
 class wxPanel;
@@ -22,6 +20,7 @@ class wxStaticBox;
 class wxStaticText;
 class wxString;
 class wxTextCtrl;
+class wxButton;
 
 class EmulatedUSBDeviceFrame : public wxFrame
 {
@@ -32,18 +31,11 @@ class EmulatedUSBDeviceFrame : public wxFrame
 
   private:
 	wxCheckBox* m_emulatePortal;
-	wxCheckBox* m_enableSkylanderApi;
-	wxCollapsiblePane* m_skylanderApiAdvanced;
-	wxCheckBox* m_enableSkylanderHttp;
-	wxCheckBox* m_enableSkylanderHttps;
-	wxTextCtrl* m_skylanderHttpHost;
-	wxTextCtrl* m_skylanderHttpsHost;
-	wxSpinCtrl* m_skylanderHttpPort;
-	wxSpinCtrl* m_skylanderHttpsPort;
+	wxButton* m_toggleSkylanderApiServer;
 	wxDirPickerCtrl* m_skylanderFolderPicker;
-	wxFilePickerCtrl* m_skylanderHttpsCertPicker;
-	wxFilePickerCtrl* m_skylanderHttpsKeyPicker;
 	wxStaticText* m_skylanderApiStatus;
+	wxStaticText* m_skylanderApiAddress;
+	wxButton* m_copySkylanderApiAddress;
 	wxCheckBox* m_emulateBase;
 	wxCheckBox* m_emulateToypad;
 	std::array<wxTextCtrl*, nsyshid::MAX_SKYLANDERS> m_skylanderSlots;

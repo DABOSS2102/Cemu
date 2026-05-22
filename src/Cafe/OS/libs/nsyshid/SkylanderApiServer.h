@@ -20,6 +20,7 @@ namespace nsyshid
 
 		[[nodiscard]] bool IsRunning() const;
 		[[nodiscard]] std::string GetStatusText() const;
+		[[nodiscard]] std::string GetHttpConnectUrl() const;
 
 	  private:
 		SkylanderApiServer() = default;
@@ -52,22 +53,17 @@ namespace nsyshid
 
 		void HttpAcceptLoop();
 		void HttpsAcceptLoop();
-		void MdnsLoop();
-		void UdpDiscoveryLoop();
 
 	  private:
 		mutable std::mutex m_mutex;
 		std::atomic_bool m_stopRequested = false;
 		bool m_httpRunning = false;
 		bool m_httpsRunning = false;
-		bool m_mdnsRunning = false;
-		bool m_udpDiscoveryRunning = false;
 		std::string m_statusText = "Stopped";
 		uint16 m_primaryPort = 0;
 		bool m_primaryHttps = false;
 		std::string m_localAddress;
 		std::vector<std::string> m_localAddresses;
-		std::string m_discoveryStatus = "Discovery stopped";
 
 		std::unique_ptr<boost::asio::io_context> m_httpIoContext;
 		std::unique_ptr<boost::asio::ip::tcp::acceptor> m_httpAcceptor;
@@ -77,11 +73,5 @@ namespace nsyshid
 		std::unique_ptr<boost::asio::ssl::context> m_httpsSslContext;
 		std::unique_ptr<boost::asio::ip::tcp::acceptor> m_httpsAcceptor;
 		std::thread m_httpsThread;
-
-		std::unique_ptr<boost::asio::io_context> m_discoveryIoContext;
-		std::unique_ptr<boost::asio::ip::udp::socket> m_mdnsSocket;
-		std::thread m_mdnsThread;
-		std::unique_ptr<boost::asio::ip::udp::socket> m_udpDiscoverySocket;
-		std::thread m_udpDiscoveryThread;
 	};
 } // namespace nsyshid
