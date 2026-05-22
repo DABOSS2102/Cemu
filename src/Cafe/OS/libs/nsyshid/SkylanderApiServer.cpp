@@ -27,6 +27,7 @@ namespace nsyshid
 		constexpr uint16 kMdnsPort = 5353;
 		constexpr uint16 kUdpDiscoveryPort = 28779;
 		constexpr std::string_view kMdnsMulticastAddress = "224.0.0.251";
+		constexpr uint32 kMdnsTtlSeconds = 120;
 		constexpr std::string_view kServiceType = "_cemu-skylander._tcp.local";
 		constexpr std::string_view kServiceInstance = "Cemu Skylander API._cemu-skylander._tcp.local";
 		constexpr std::string_view kServiceHost = "cemu-skylander.local";
@@ -129,23 +130,6 @@ namespace nsyshid
 			{
 			}
 
-			if (uniqueAddresses.empty())
-			{
-				try
-				{
-					boost::asio::io_context io;
-					boost::asio::ip::udp::socket socket(io);
-					socket.open(boost::asio::ip::udp::v4());
-					socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::make_address("8.8.8.8"), 53));
-					const auto addr = socket.local_endpoint().address();
-					if (addr.is_v4() && !addr.is_loopback() && !addr.is_unspecified())
-						uniqueAddresses.emplace(addr.to_string());
-				}
-				catch (...)
-				{
-				}
-			}
-
 			return std::vector<std::string>(uniqueAddresses.begin(), uniqueAddresses.end());
 		}
 
@@ -158,7 +142,7 @@ namespace nsyshid
 			WriteDnsName(out, hostName);
 			WriteU16(out, 1);
 			WriteU16(out, 1);
-			WriteU32(out, 120);
+			WriteU32(out, kMdnsTtlSeconds);
 			const auto bytes = parsedAddress.to_bytes();
 			WriteU16(out, 4);
 			out.append((const char*)bytes.data(), bytes.size());
@@ -743,7 +727,7 @@ namespace nsyshid
 				WriteDnsName(response, kServiceType);
 				WriteU16(response, 12);
 				WriteU16(response, 1);
-				WriteU32(response, 120);
+				WriteU32(response, kMdnsTtlSeconds);
 				std::string ptrData;
 				WriteDnsName(ptrData, kServiceInstance);
 				WriteU16(response, (uint16)ptrData.size());
@@ -752,7 +736,7 @@ namespace nsyshid
 				WriteDnsName(response, kServiceInstance);
 				WriteU16(response, 33);
 				WriteU16(response, 1);
-				WriteU32(response, 120);
+				WriteU32(response, kMdnsTtlSeconds);
 				std::string srvData;
 				WriteU16(srvData, 0);
 				WriteU16(srvData, 0);
@@ -764,7 +748,7 @@ namespace nsyshid
 				WriteDnsName(response, kServiceInstance);
 				WriteU16(response, 16);
 				WriteU16(response, 1);
-				WriteU32(response, 120);
+				WriteU32(response, kMdnsTtlSeconds);
 				const std::string txtValue = fmt::format("scheme={}", primaryHttps ? "https" : "http");
 				std::string txtData;
 				txtData.push_back((char)txtValue.size());
