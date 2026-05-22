@@ -101,10 +101,10 @@ wxPanel* EmulatedUSBDeviceFrame::AddSkylanderPage(wxNotebook* notebook)
 	boxSizer->Add(apiEnableRow, 1, wxEXPAND | wxALL, 2);
 
 	auto* folderRow = new wxBoxSizer(wxHORIZONTAL);
-	folderRow->Add(new wxStaticText(box, wxID_ANY, _("Skylanders folder")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	folderRow->Add(new wxStaticText(box, wxID_ANY, _("Skylander API folder")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 	m_skylanderFolderPicker = new wxDirPickerCtrl(box, wxID_ANY,
 		_pathToUtf8(nsyshid::SkylanderPortalManager::GetInstance().GetStorageFolderPath()),
-		_("Select Skylanders folder"));
+		_("Select Skylander API folder"));
 	m_skylanderFolderPicker->Bind(wxEVT_DIRPICKER_CHANGED, [this](wxFileDirPickerEvent&) {
 		std::string error;
 		if (!nsyshid::SkylanderPortalManager::GetInstance().SetStorageFolderPath(_utf8ToPath(m_skylanderFolderPicker->GetPath().utf8_string()), error))

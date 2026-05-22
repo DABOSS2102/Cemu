@@ -41,6 +41,10 @@ namespace nsyshid
 		HttpResponse HandleConfigPut(const std::string& body);
 		HttpResponse HandleSlotLoad(uint8 slot, const std::string& body);
 		HttpResponse HandleSlotCreate(uint8 slot, const std::string& body);
+		HttpResponse HandleStorageCreate(const std::string& body);
+		HttpResponse HandleStorageListFiles() const;
+		HttpResponse HandleStorageLoad(const std::string& body);
+		HttpResponse HandleLoadedSlotFileNames() const;
 		std::string BuildInfoJson() const;
 		HttpResponse MakeJsonError(int status, std::string_view errorText) const;
 		HttpResponse MakeJsonOk(std::string body) const;

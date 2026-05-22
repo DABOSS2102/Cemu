@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -54,6 +55,28 @@ namespace nsyshid
 			}
 
 			return std::vector<std::string>(uniqueAddresses.begin(), uniqueAddresses.end());
+		}
+
+		std::string SanitizeFileComponent(std::string_view input)
+		{
+			std::string result;
+			result.reserve(input.size());
+			for (const unsigned char c : input)
+			{
+				if (std::isalnum(c) || c == '-' || c == '_')
+					result.push_back((char)c);
+				else
+					result.push_back('_');
+			}
+
+			while (!result.empty() && result.front() == '_')
+				result.erase(result.begin());
+			while (!result.empty() && result.back() == '_')
+				result.pop_back();
+
+			if (result.empty())
+				result = "skylander";
+			return result;
 		}
 
 	}
@@ -551,6 +574,10 @@ namespace nsyshid
 		w.String("config");
 		w.String("slots");
 		w.String("catalog");
+		w.String("storage-create");
+		w.String("storage-list");
+		w.String("storage-load");
+		w.String("loaded-files");
 		w.EndArray();
 		w.EndObject();
 		return s.GetString();
@@ -631,6 +658,133 @@ namespace nsyshid
 		w.StartObject();
 		w.Key("ok");
 		w.Bool(true);
+		w.EndObject();
+		return MakeJsonOk(s.GetString());
+	}
+
+	SkylanderApiServer::HttpResponse SkylanderApiServer::HandleStorageCreate(const std::string& body)
+	{
+		rapidjson::Document d;
+		d.Parse(body.c_str());
+		if (d.HasParseError() || !d.IsObject() ||
+			!d.HasMember("skyId") || !d["skyId"].IsUint() ||
+			!d.HasMember("skyVar") || !d["skyVar"].IsUint() ||
+			!d.HasMember("name") || !d["name"].IsString())
+		{
+			return MakeJsonError(400, "Expected 'skyId', 'skyVar', and 'name'");
+		}
+
+		const auto skyIdRaw = d["skyId"].GetUint();
+		const auto skyVarRaw = d["skyVar"].GetUint();
+		if (skyIdRaw > 0xFFFF || skyVarRaw > 0xFFFF)
+			return MakeJsonError(400, "skyId and skyVar must be in range 0..65535");
+
+		const uint16 skyId = (uint16)skyIdRaw;
+		const uint16 skyVar = (uint16)skyVarRaw;
+		const std::string safeName = SanitizeFileComponent(d["name"].GetString());
+		const std::string fileName = fmt::format("{}_{}_{}", skyId, skyVar, safeName);
+
+		fs::path filePath;
+		std::string error;
+		if (!SkylanderPortalManager::GetInstance().ResolveStorageFilePath(fileName, filePath, error))
+			return MakeJsonError(400, error);
+
+		std::error_code ec;
+		if (fs::exists(filePath, ec) && !ec)
+			return MakeJsonError(409, "File already exists");
+		if (ec)
+			return MakeJsonError(500, fmt::format("Failed to check file existence: {}", ec.message()));
+
+		if (!g_skyportal.CreateSkylander(filePath, skyId, skyVar))
+			return MakeJsonError(500, "Failed to create Skylander file");
+
+		rapidjson::StringBuffer s;
+		rapidjson::Writer<rapidjson::StringBuffer> w(s);
+		w.StartObject();
+		w.Key("ok");
+		w.Bool(true);
+		w.Key("file");
+		w.String(fileName.c_str(), (rapidjson::SizeType)fileName.size());
+		w.EndObject();
+		return MakeJsonOk(s.GetString());
+	}
+
+	SkylanderApiServer::HttpResponse SkylanderApiServer::HandleStorageListFiles() const
+	{
+		const auto storageFolder = SkylanderPortalManager::GetInstance().GetStorageFolderPath();
+		std::error_code ec;
+		if (!fs::exists(storageFolder, ec))
+			fs::create_directories(storageFolder, ec);
+		if (ec)
+			return MakeJsonError(500, fmt::format("Failed to access storage folder: {}", ec.message()));
+
+		std::vector<std::string> fileNames;
+		for (const auto& entry : fs::directory_iterator(storageFolder, ec))
+		{
+			if (ec)
+				return MakeJsonError(500, fmt::format("Failed to list storage files: {}", ec.message()));
+			if (!entry.is_regular_file())
+				continue;
+			fileNames.emplace_back(_pathToUtf8(entry.path().filename()));
+		}
+		std::sort(fileNames.begin(), fileNames.end());
+
+		rapidjson::StringBuffer s;
+		rapidjson::Writer<rapidjson::StringBuffer> w(s);
+		w.StartObject();
+		w.Key("files");
+		w.StartArray();
+		for (const auto& fileName : fileNames)
+			w.String(fileName.c_str(), (rapidjson::SizeType)fileName.size());
+		w.EndArray();
+		w.EndObject();
+		return MakeJsonOk(s.GetString());
+	}
+
+	SkylanderApiServer::HttpResponse SkylanderApiServer::HandleStorageLoad(const std::string& body)
+	{
+		rapidjson::Document d;
+		d.Parse(body.c_str());
+		if (d.HasParseError() || !d.IsObject() || !d.HasMember("slot") || !d["slot"].IsUint())
+		{
+			return MakeJsonError(400, "Expected 'slot' and 'filename'");
+		}
+
+		const auto slotNum = d["slot"].GetUint();
+		if (slotNum >= MAX_SKYLANDERS)
+			return MakeJsonError(400, "Invalid slot index");
+
+		std::string fileName;
+		if (d.HasMember("filename") && d["filename"].IsString())
+			fileName = d["filename"].GetString();
+		else if (d.HasMember("file") && d["file"].IsString())
+			fileName = d["file"].GetString();
+		else
+			return MakeJsonError(400, "Expected 'filename'");
+
+		std::string error;
+		if (!SkylanderPortalManager::GetInstance().LoadSkylanderFromStorage((uint8)slotNum, fileName, error))
+			return MakeJsonError(409, error);
+
+		return MakeJsonOk(R"({"ok":true})");
+	}
+
+	SkylanderApiServer::HttpResponse SkylanderApiServer::HandleLoadedSlotFileNames() const
+	{
+		const auto slots = SkylanderPortalManager::GetInstance().GetSlots();
+		rapidjson::StringBuffer s;
+		rapidjson::Writer<rapidjson::StringBuffer> w(s);
+		w.StartObject();
+		w.Key("loadedFiles");
+		w.StartArray();
+		for (const auto& slot : slots)
+		{
+			if (!slot.loaded)
+				continue;
+			const auto fileName = _pathToUtf8(slot.filePath.filename());
+			w.String(fileName.c_str(), (rapidjson::SizeType)fileName.size());
+		}
+		w.EndArray();
 		w.EndObject();
 		return MakeJsonOk(s.GetString());
 	}
@@ -722,6 +876,14 @@ namespace nsyshid
 			w.EndObject();
 			return MakeJsonOk(s.GetString());
 		}
+		if (method == "POST" && path == "/api/skylanders/storage/create")
+			return HandleStorageCreate(body);
+		if (method == "GET" && path == "/api/skylanders/storage/files")
+			return HandleStorageListFiles();
+		if (method == "POST" && path == "/api/skylanders/storage/load")
+			return HandleStorageLoad(body);
+		if (method == "GET" && path == "/api/skylanders/storage/loaded")
+			return HandleLoadedSlotFileNames();
 
 		std::match_results<std::string_view::const_iterator> match;
 		if (std::regex_match(path.begin(), path.end(), match, kSlotRegex))
