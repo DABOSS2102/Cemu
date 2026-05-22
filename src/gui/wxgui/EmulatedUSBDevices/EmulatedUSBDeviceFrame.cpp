@@ -18,6 +18,7 @@
 #include <wx/button.h>
 #include <wx/combobox.h>
 #include <wx/checkbox.h>
+#include <wx/collpane.h>
 #include <wx/combobox.h>
 #include <wx/filedlg.h>
 #include <wx/filepicker.h>
@@ -94,66 +95,6 @@ wxPanel* EmulatedUSBDeviceFrame::AddSkylanderPage(wxNotebook* notebook)
 	apiEnableRow->Add(m_enableSkylanderApi, 1, wxEXPAND | wxALL, 2);
 	boxSizer->Add(apiEnableRow, 1, wxEXPAND | wxALL, 2);
 
-	auto* apiHttpRow = new wxBoxSizer(wxHORIZONTAL);
-	m_enableSkylanderHttp = new wxCheckBox(box, wxID_ANY, _("HTTP"));
-	m_enableSkylanderHttp->SetValue(GetConfig().emulated_usb_devices.skylander_api_http_enabled);
-	m_enableSkylanderHttp->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
-		GetConfig().emulated_usb_devices.skylander_api_http_enabled = m_enableSkylanderHttp->IsChecked();
-		GetConfigHandle().Save();
-		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
-		UpdateSkylanderApiStatus();
-	});
-	apiHttpRow->Add(m_enableSkylanderHttp, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	apiHttpRow->Add(new wxStaticText(box, wxID_ANY, _("Host")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderHttpHost = new wxTextCtrl(box, wxID_ANY, GetConfig().emulated_usb_devices.skylander_api_http_host.GetValue());
-	m_skylanderHttpHost->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
-		GetConfig().emulated_usb_devices.skylander_api_http_host = m_skylanderHttpHost->GetValue().ToStdString();
-		GetConfigHandle().Save();
-		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
-		UpdateSkylanderApiStatus();
-	});
-	apiHttpRow->Add(m_skylanderHttpHost, 1, wxALL | wxEXPAND, 2);
-	apiHttpRow->Add(new wxStaticText(box, wxID_ANY, _("Port")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderHttpPort = new wxSpinCtrl(box, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0, 1, 65535, GetConfig().emulated_usb_devices.skylander_api_http_port.GetValue());
-	m_skylanderHttpPort->Bind(wxEVT_SPINCTRL, [this](wxCommandEvent&) {
-		GetConfig().emulated_usb_devices.skylander_api_http_port = (uint16)m_skylanderHttpPort->GetValue();
-		GetConfigHandle().Save();
-		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
-		UpdateSkylanderApiStatus();
-	});
-	apiHttpRow->Add(m_skylanderHttpPort, 0, wxALL, 2);
-	boxSizer->Add(apiHttpRow, 1, wxEXPAND | wxALL, 2);
-
-	auto* apiHttpsRow = new wxBoxSizer(wxHORIZONTAL);
-	m_enableSkylanderHttps = new wxCheckBox(box, wxID_ANY, _("HTTPS"));
-	m_enableSkylanderHttps->SetValue(GetConfig().emulated_usb_devices.skylander_api_https_enabled);
-	m_enableSkylanderHttps->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
-		GetConfig().emulated_usb_devices.skylander_api_https_enabled = m_enableSkylanderHttps->IsChecked();
-		GetConfigHandle().Save();
-		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
-		UpdateSkylanderApiStatus();
-	});
-	apiHttpsRow->Add(m_enableSkylanderHttps, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	apiHttpsRow->Add(new wxStaticText(box, wxID_ANY, _("Host")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderHttpsHost = new wxTextCtrl(box, wxID_ANY, GetConfig().emulated_usb_devices.skylander_api_https_host.GetValue());
-	m_skylanderHttpsHost->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
-		GetConfig().emulated_usb_devices.skylander_api_https_host = m_skylanderHttpsHost->GetValue().ToStdString();
-		GetConfigHandle().Save();
-		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
-		UpdateSkylanderApiStatus();
-	});
-	apiHttpsRow->Add(m_skylanderHttpsHost, 1, wxALL | wxEXPAND, 2);
-	apiHttpsRow->Add(new wxStaticText(box, wxID_ANY, _("Port")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderHttpsPort = new wxSpinCtrl(box, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0, 1, 65535, GetConfig().emulated_usb_devices.skylander_api_https_port.GetValue());
-	m_skylanderHttpsPort->Bind(wxEVT_SPINCTRL, [this](wxCommandEvent&) {
-		GetConfig().emulated_usb_devices.skylander_api_https_port = (uint16)m_skylanderHttpsPort->GetValue();
-		GetConfigHandle().Save();
-		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
-		UpdateSkylanderApiStatus();
-	});
-	apiHttpsRow->Add(m_skylanderHttpsPort, 0, wxALL, 2);
-	boxSizer->Add(apiHttpsRow, 1, wxEXPAND | wxALL, 2);
-
 	auto* folderRow = new wxBoxSizer(wxHORIZONTAL);
 	folderRow->Add(new wxStaticText(box, wxID_ANY, _("Skylanders folder")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 	m_skylanderFolderPicker = new wxDirPickerCtrl(box, wxID_ANY,
@@ -173,9 +114,80 @@ wxPanel* EmulatedUSBDeviceFrame::AddSkylanderPage(wxNotebook* notebook)
 	folderRow->Add(m_skylanderFolderPicker, 1, wxALL | wxEXPAND, 2);
 	boxSizer->Add(folderRow, 1, wxEXPAND | wxALL, 2);
 
+	auto* statusRow = new wxBoxSizer(wxHORIZONTAL);
+	statusRow->Add(new wxStaticText(box, wxID_ANY, _("API status")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderApiStatus = new wxStaticText(box, wxID_ANY, wxEmptyString);
+	statusRow->Add(m_skylanderApiStatus, 1, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	boxSizer->Add(statusRow, 1, wxEXPAND | wxALL, 2);
+
+	m_skylanderApiAdvanced = new wxCollapsiblePane(box, wxID_ANY, _("Advanced server settings"));
+	boxSizer->Add(m_skylanderApiAdvanced, 0, wxEXPAND | wxALL, 2);
+	auto* advancedPane = m_skylanderApiAdvanced->GetPane();
+	auto* advancedSizer = new wxBoxSizer(wxVERTICAL);
+
+	auto* apiHttpRow = new wxBoxSizer(wxHORIZONTAL);
+	m_enableSkylanderHttp = new wxCheckBox(advancedPane, wxID_ANY, _("HTTP"));
+	m_enableSkylanderHttp->SetValue(GetConfig().emulated_usb_devices.skylander_api_http_enabled);
+	m_enableSkylanderHttp->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.skylander_api_http_enabled = m_enableSkylanderHttp->IsChecked();
+		GetConfigHandle().Save();
+		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
+		UpdateSkylanderApiStatus();
+	});
+	apiHttpRow->Add(m_enableSkylanderHttp, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	apiHttpRow->Add(new wxStaticText(advancedPane, wxID_ANY, _("Host")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderHttpHost = new wxTextCtrl(advancedPane, wxID_ANY, GetConfig().emulated_usb_devices.skylander_api_http_host.GetValue());
+	m_skylanderHttpHost->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.skylander_api_http_host = m_skylanderHttpHost->GetValue().ToStdString();
+		GetConfigHandle().Save();
+		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
+		UpdateSkylanderApiStatus();
+	});
+	apiHttpRow->Add(m_skylanderHttpHost, 1, wxALL | wxEXPAND, 2);
+	apiHttpRow->Add(new wxStaticText(advancedPane, wxID_ANY, _("Port")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderHttpPort = new wxSpinCtrl(advancedPane, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0, 1, 65535, GetConfig().emulated_usb_devices.skylander_api_http_port.GetValue());
+	m_skylanderHttpPort->Bind(wxEVT_SPINCTRL, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.skylander_api_http_port = (uint16)m_skylanderHttpPort->GetValue();
+		GetConfigHandle().Save();
+		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
+		UpdateSkylanderApiStatus();
+	});
+	apiHttpRow->Add(m_skylanderHttpPort, 0, wxALL, 2);
+	advancedSizer->Add(apiHttpRow, 1, wxEXPAND | wxALL, 2);
+
+	auto* apiHttpsRow = new wxBoxSizer(wxHORIZONTAL);
+	m_enableSkylanderHttps = new wxCheckBox(advancedPane, wxID_ANY, _("HTTPS"));
+	m_enableSkylanderHttps->SetValue(GetConfig().emulated_usb_devices.skylander_api_https_enabled);
+	m_enableSkylanderHttps->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.skylander_api_https_enabled = m_enableSkylanderHttps->IsChecked();
+		GetConfigHandle().Save();
+		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
+		UpdateSkylanderApiStatus();
+	});
+	apiHttpsRow->Add(m_enableSkylanderHttps, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	apiHttpsRow->Add(new wxStaticText(advancedPane, wxID_ANY, _("Host")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderHttpsHost = new wxTextCtrl(advancedPane, wxID_ANY, GetConfig().emulated_usb_devices.skylander_api_https_host.GetValue());
+	m_skylanderHttpsHost->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.skylander_api_https_host = m_skylanderHttpsHost->GetValue().ToStdString();
+		GetConfigHandle().Save();
+		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
+		UpdateSkylanderApiStatus();
+	});
+	apiHttpsRow->Add(m_skylanderHttpsHost, 1, wxALL | wxEXPAND, 2);
+	apiHttpsRow->Add(new wxStaticText(advancedPane, wxID_ANY, _("Port")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderHttpsPort = new wxSpinCtrl(advancedPane, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0, 1, 65535, GetConfig().emulated_usb_devices.skylander_api_https_port.GetValue());
+	m_skylanderHttpsPort->Bind(wxEVT_SPINCTRL, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.skylander_api_https_port = (uint16)m_skylanderHttpsPort->GetValue();
+		GetConfigHandle().Save();
+		nsyshid::SkylanderApiServer::GetInstance().ApplyConfig();
+		UpdateSkylanderApiStatus();
+	});
+	apiHttpsRow->Add(m_skylanderHttpsPort, 0, wxALL, 2);
+	advancedSizer->Add(apiHttpsRow, 1, wxEXPAND | wxALL, 2);
+
 	auto* certRow = new wxBoxSizer(wxHORIZONTAL);
-	certRow->Add(new wxStaticText(box, wxID_ANY, _("HTTPS cert")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderHttpsCertPicker = new wxFilePickerCtrl(box, wxID_ANY,
+	certRow->Add(new wxStaticText(advancedPane, wxID_ANY, _("HTTPS cert")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderHttpsCertPicker = new wxFilePickerCtrl(advancedPane, wxID_ANY,
 		GetConfig().emulated_usb_devices.skylander_api_https_cert_path.GetValue(), _("Select certificate file"));
 	m_skylanderHttpsCertPicker->Bind(wxEVT_FILEPICKER_CHANGED, [this](wxFileDirPickerEvent&) {
 		GetConfig().emulated_usb_devices.skylander_api_https_cert_path = m_skylanderHttpsCertPicker->GetPath().ToStdString();
@@ -184,11 +196,11 @@ wxPanel* EmulatedUSBDeviceFrame::AddSkylanderPage(wxNotebook* notebook)
 		UpdateSkylanderApiStatus();
 	});
 	certRow->Add(m_skylanderHttpsCertPicker, 1, wxALL | wxEXPAND, 2);
-	boxSizer->Add(certRow, 1, wxEXPAND | wxALL, 2);
+	advancedSizer->Add(certRow, 1, wxEXPAND | wxALL, 2);
 
 	auto* keyRow = new wxBoxSizer(wxHORIZONTAL);
-	keyRow->Add(new wxStaticText(box, wxID_ANY, _("HTTPS key")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderHttpsKeyPicker = new wxFilePickerCtrl(box, wxID_ANY,
+	keyRow->Add(new wxStaticText(advancedPane, wxID_ANY, _("HTTPS key")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+	m_skylanderHttpsKeyPicker = new wxFilePickerCtrl(advancedPane, wxID_ANY,
 		GetConfig().emulated_usb_devices.skylander_api_https_key_path.GetValue(), _("Select key file"));
 	m_skylanderHttpsKeyPicker->Bind(wxEVT_FILEPICKER_CHANGED, [this](wxFileDirPickerEvent&) {
 		GetConfig().emulated_usb_devices.skylander_api_https_key_path = m_skylanderHttpsKeyPicker->GetPath().ToStdString();
@@ -197,13 +209,8 @@ wxPanel* EmulatedUSBDeviceFrame::AddSkylanderPage(wxNotebook* notebook)
 		UpdateSkylanderApiStatus();
 	});
 	keyRow->Add(m_skylanderHttpsKeyPicker, 1, wxALL | wxEXPAND, 2);
-	boxSizer->Add(keyRow, 1, wxEXPAND | wxALL, 2);
-
-	auto* statusRow = new wxBoxSizer(wxHORIZONTAL);
-	statusRow->Add(new wxStaticText(box, wxID_ANY, _("API status")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	m_skylanderApiStatus = new wxStaticText(box, wxID_ANY, wxEmptyString);
-	statusRow->Add(m_skylanderApiStatus, 1, wxALL | wxALIGN_CENTER_VERTICAL, 2);
-	boxSizer->Add(statusRow, 1, wxEXPAND | wxALL, 2);
+	advancedSizer->Add(keyRow, 1, wxEXPAND | wxALL, 2);
+	advancedPane->SetSizer(advancedSizer);
 	UpdateSkylanderApiStatus();
 	for (int i = 0; i < nsyshid::MAX_SKYLANDERS; i++)
 	{

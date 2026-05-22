@@ -10,6 +10,7 @@
 
 class wxBoxSizer;
 class wxCheckBox;
+class wxCollapsiblePane;
 class wxDirPickerCtrl;
 class wxFilePickerCtrl;
 class wxFlexGridSizer;
@@ -31,6 +32,7 @@ class EmulatedUSBDeviceFrame : public wxFrame
   private:
 	wxCheckBox* m_emulatePortal;
 	wxCheckBox* m_enableSkylanderApi;
+	wxCollapsiblePane* m_skylanderApiAdvanced;
 	wxCheckBox* m_enableSkylanderHttp;
 	wxCheckBox* m_enableSkylanderHttps;
 	wxTextCtrl* m_skylanderHttpHost;

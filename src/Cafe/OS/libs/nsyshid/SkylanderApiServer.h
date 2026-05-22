@@ -3,6 +3,7 @@
 #include <atomic>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -65,6 +66,7 @@ namespace nsyshid
 		uint16 m_primaryPort = 0;
 		bool m_primaryHttps = false;
 		std::string m_localAddress;
+		std::vector<std::string> m_localAddresses;
 		std::string m_discoveryStatus = "Discovery stopped";
 
 		std::unique_ptr<boost::asio::io_context> m_httpIoContext;

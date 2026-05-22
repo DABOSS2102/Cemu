@@ -1,7 +1,9 @@
 #include "SkylanderApiServer.h"
 
+#include <algorithm>
 #include <array>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 #include <cstring>
@@ -35,7 +37,6 @@ namespace nsyshid
 			if (depth > 8)
 				return false;
 			std::string name;
-			bool jumped = false;
 			size_t current = offset;
 			while (current < packet.size())
 			{
@@ -54,7 +55,6 @@ namespace nsyshid
 					if (!name.empty() && !pointedName.empty())
 						name += ".";
 					name += pointedName;
-					jumped = true;
 					break;
 				}
 				if (len == 0)
@@ -101,22 +101,67 @@ namespace nsyshid
 			out.push_back('\0');
 		}
 
-		std::string GetPreferredLocalIpv4()
+		std::vector<std::string> GetLocalIpv4Addresses()
 		{
+			std::set<std::string> uniqueAddresses;
 			try
 			{
 				boost::asio::io_context io;
-				boost::asio::ip::udp::socket socket(io);
-				socket.open(boost::asio::ip::udp::v4());
-				socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::make_address("8.8.8.8"), 53));
-				const auto addr = socket.local_endpoint().address();
-				if (addr.is_v4())
-					return addr.to_string();
+				boost::system::error_code ec;
+				boost::asio::ip::tcp::resolver resolver(io);
+				const auto hostname = boost::asio::ip::host_name(ec);
+				if (!ec)
+				{
+					const auto results = resolver.resolve(hostname, "", ec);
+					if (!ec)
+					{
+						for (const auto& result : results)
+						{
+							const auto addr = result.endpoint().address();
+							if (!addr.is_v4() || addr.is_loopback() || addr.is_unspecified())
+								continue;
+							uniqueAddresses.emplace(addr.to_string());
+						}
+					}
+				}
 			}
 			catch (...)
 			{
 			}
-			return {};
+
+			if (uniqueAddresses.empty())
+			{
+				try
+				{
+					boost::asio::io_context io;
+					boost::asio::ip::udp::socket socket(io);
+					socket.open(boost::asio::ip::udp::v4());
+					socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::make_address("8.8.8.8"), 53));
+					const auto addr = socket.local_endpoint().address();
+					if (addr.is_v4() && !addr.is_loopback() && !addr.is_unspecified())
+						uniqueAddresses.emplace(addr.to_string());
+				}
+				catch (...)
+				{
+				}
+			}
+
+			return std::vector<std::string>(uniqueAddresses.begin(), uniqueAddresses.end());
+		}
+
+		void AppendARecord(std::string& out, std::string_view hostName, std::string_view addressText)
+		{
+			boost::system::error_code ec;
+			const auto parsedAddress = boost::asio::ip::make_address_v4(std::string(addressText), ec);
+			if (ec)
+				return;
+			WriteDnsName(out, hostName);
+			WriteU16(out, 1);
+			WriteU16(out, 1);
+			WriteU32(out, 120);
+			const auto bytes = parsedAddress.to_bytes();
+			WriteU16(out, 4);
+			out.append((const char*)bytes.data(), bytes.size());
 		}
 	}
 
@@ -216,6 +261,7 @@ namespace nsyshid
 			m_primaryPort = 0;
 			m_primaryHttps = false;
 			m_localAddress.clear();
+			m_localAddresses.clear();
 			m_discoveryStatus = "Discovery stopped";
 			m_statusText = "Stopped";
 		}
@@ -311,17 +357,17 @@ namespace nsyshid
 			m_primaryPort = primaryPort;
 			m_primaryHttps = primaryHttps;
 
-			const std::string localAddress = GetPreferredLocalIpv4();
-			std::string resolvedLocalAddress = localAddress;
-			if (resolvedLocalAddress.empty())
+			auto localAddresses = GetLocalIpv4Addresses();
+			if (localAddresses.empty())
 			{
 				const auto host = enableHttp ? usbCfg.skylander_api_http_host.GetValue() : usbCfg.skylander_api_https_host.GetValue();
 				boost::system::error_code hostEc;
 				const auto parsedAddress = boost::asio::ip::make_address(host, hostEc);
 				if (!hostEc && parsedAddress.is_v4() && !parsedAddress.is_unspecified() && !parsedAddress.is_loopback())
-					resolvedLocalAddress = parsedAddress.to_string();
+					localAddresses.emplace_back(parsedAddress.to_string());
 			}
-			m_localAddress = resolvedLocalAddress;
+			m_localAddresses = localAddresses;
+			m_localAddress = m_localAddresses.empty() ? "" : m_localAddresses.front();
 
 			std::string discoveryResult;
 			try
@@ -367,6 +413,10 @@ namespace nsyshid
 				statusParts.emplace_back(fmt::format("HTTP {}:{}", usbCfg.skylander_api_http_host.GetValue(), usbCfg.skylander_api_http_port.GetValue()));
 			if (enableHttps)
 				statusParts.emplace_back(fmt::format("HTTPS {}:{}", usbCfg.skylander_api_https_host.GetValue(), usbCfg.skylander_api_https_port.GetValue()));
+			if (!m_localAddress.empty())
+				statusParts.emplace_back(fmt::format("Connect {}://{}:{}", primaryHttps ? "https" : "http", m_localAddress, primaryPort));
+			else
+				statusParts.emplace_back(fmt::format("Connect {}://<lan-ip>:{}", primaryHttps ? "https" : "http", primaryPort));
 			if (m_mdnsRunning)
 				statusParts.emplace_back(fmt::format("mDNS {} on {}", kServiceType, primaryPort));
 			else
@@ -639,35 +689,54 @@ namespace nsyshid
 					continue;
 
 				size_t offset = 12;
-				std::string queryName;
-				if (!ParseDnsName(packet, offset, queryName))
-					continue;
-				if (offset + 4 > packet.size())
-					continue;
-				const uint16 queryType = ((uint16)packet[offset] << 8) | packet[offset + 1];
-				offset += 4;
+				bool hasServiceQuery = false;
+				for (uint16 q = 0; q < qdCount; ++q)
+				{
+					std::string queryName;
+					if (!ParseDnsName(packet, offset, queryName))
+					{
+						hasServiceQuery = false;
+						break;
+					}
+					if (offset + 4 > packet.size())
+					{
+						hasServiceQuery = false;
+						break;
+					}
+					const uint16 queryType = ((uint16)packet[offset] << 8) | packet[offset + 1];
+					offset += 4;
+					const bool typeMatches = queryType == 12 || queryType == 255;
+					if (typeMatches && queryName == kServiceType)
+					{
+						hasServiceQuery = true;
+						break;
+					}
+				}
 
-				const bool typeMatches = queryType == 12 || queryType == 255;
-				if (!typeMatches || queryName != kServiceType)
+				if (!hasServiceQuery)
 					continue;
 
 				uint16 primaryPort = 0;
 				bool primaryHttps = false;
 				std::string localAddress;
+				std::vector<std::string> localAddresses;
 				{
 					std::lock_guard lock(m_mutex);
 					primaryPort = m_primaryPort;
 					primaryHttps = m_primaryHttps;
 					localAddress = m_localAddress;
+					localAddresses = m_localAddresses;
 				}
 				if (primaryPort == 0)
 					continue;
+				if (localAddresses.empty() && !localAddress.empty())
+					localAddresses.push_back(localAddress);
 
 				std::string response;
 				WriteU16(response, ((uint16)packet[0] << 8) | packet[1]);
 				WriteU16(response, 0x8400);
 				WriteU16(response, 0);
-				WriteU16(response, 4);
+				WriteU16(response, (uint16)(3 + std::max<size_t>(1, localAddresses.size())));
 				WriteU16(response, 0);
 				WriteU16(response, 0);
 
@@ -703,23 +772,15 @@ namespace nsyshid
 				WriteU16(response, (uint16)txtData.size());
 				response += txtData;
 
-				WriteDnsName(response, kServiceHost);
-				WriteU16(response, 1);
-				WriteU16(response, 1);
-				WriteU32(response, 120);
-				boost::asio::ip::address_v4 responseAddressV4 = boost::asio::ip::address_v4::loopback();
-				boost::system::error_code parseEc;
-				if (!localAddress.empty())
+				if (localAddresses.empty())
+					AppendARecord(response, kServiceHost, "127.0.0.1");
+				else
 				{
-					const auto parsed = boost::asio::ip::make_address_v4(localAddress, parseEc);
-					if (!parseEc)
-						responseAddressV4 = parsed;
+					for (const auto& addr : localAddresses)
+						AppendARecord(response, kServiceHost, addr);
 				}
-				const auto bytes = responseAddressV4.to_bytes();
-				WriteU16(response, 4);
-				response.append((const char*)bytes.data(), bytes.size());
 
-				m_mdnsSocket->send_to(boost::asio::buffer(response), boost::asio::ip::udp::endpoint(boost::asio::ip::make_address_v4(std::string(kMdnsMulticastAddress)), kMdnsPort), 0, ec);
+				m_mdnsSocket->send_to(boost::asio::buffer(response), remoteEndpoint, 0, ec);
 				if (ec)
 					continue;
 			}
@@ -776,6 +837,7 @@ namespace nsyshid
 		bool primaryHttps = false;
 		uint16 primaryPort = 0;
 		std::string localAddress;
+		std::vector<std::string> localAddresses;
 		std::string discoveryStatus;
 		{
 			std::lock_guard lock(m_mutex);
@@ -784,6 +846,7 @@ namespace nsyshid
 			primaryHttps = m_primaryHttps;
 			primaryPort = m_primaryPort;
 			localAddress = m_localAddress;
+			localAddresses = m_localAddresses;
 			discoveryStatus = m_discoveryStatus;
 		}
 		rapidjson::StringBuffer s;
@@ -833,6 +896,21 @@ namespace nsyshid
 		w.Uint(primaryPort);
 		w.Key("localAddress");
 		w.String(localAddress.c_str());
+		w.Key("localAddresses");
+		w.StartArray();
+		for (const auto& addr : localAddresses)
+			w.String(addr.c_str());
+		w.EndArray();
+		w.Key("connectUrl");
+		if (!localAddress.empty() && primaryPort != 0)
+		{
+			const auto connectUrl = fmt::format("{}://{}:{}", primaryHttps ? "https" : "http", localAddress, primaryPort);
+			w.String(connectUrl.c_str());
+		}
+		else
+		{
+			w.String("");
+		}
 		w.Key("summary");
 		w.String(discoveryStatus.c_str());
 		w.EndObject();
