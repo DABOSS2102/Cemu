@@ -1,16 +1,17 @@
 #pragma once
 
 #include <array>
+#include <optional>
 
 #include <wx/dialog.h>
 #include <wx/frame.h>
+#include <wx/collpane.h>
 
 #include "Cafe/OS/libs/nsyshid/Infinity.h"
 #include "Cafe/OS/libs/nsyshid/Skylander.h"
 
 class wxBoxSizer;
 class wxCheckBox;
-class wxCollapsiblePane;
 class wxDirPickerCtrl;
 class wxFilePickerCtrl;
 class wxFlexGridSizer;
