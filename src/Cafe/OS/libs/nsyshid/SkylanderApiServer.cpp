@@ -681,8 +681,12 @@ namespace nsyshid
 
 		const uint16 skyId = (uint16)skyIdRaw;
 		const uint16 skyVar = (uint16)skyVarRaw;
+		long longSkyId = static_cast<long>(skyId);
+		long longSkyVar = static_cast<long>(skyVar);
+		uint16 updatedSkyId = longSkyId & 0xFFFF;
+		uint16 updatedSkyVar = longSkyVar & 0xFFFF;
 		const std::string safeName = SanitizeFileComponent(d["name"].GetString());
-		const std::string fileName = fmt::format("{}_{}_{}", skyId, skyVar, safeName);
+		const std::string fileName = fmt::format("{}_{}_{}.sky", skyId, skyVar, safeName);
 
 		fs::path filePath;
 		std::string error;
@@ -695,7 +699,7 @@ namespace nsyshid
 		if (ec)
 			return MakeJsonError(500, fmt::format("Failed to check file existence: {}", ec.message()));
 
-		if (!g_skyportal.CreateSkylander(filePath, skyId, skyVar))
+		if (!g_skyportal.CreateSkylander(filePath, updatedSkyId, updatedSkyVar))
 			return MakeJsonError(500, "Failed to create Skylander file");
 
 		rapidjson::StringBuffer s;
