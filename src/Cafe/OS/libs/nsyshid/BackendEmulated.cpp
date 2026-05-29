@@ -1,6 +1,7 @@
 #include "BackendEmulated.h"
 
 #include "Dimensions.h"
+#include "EmulatedUSBDevice.h"
 #include "Infinity.h"
 #include "Skylander.h"
 #include "config/CemuConfig.h"
@@ -29,7 +30,7 @@ namespace nsyshid::backend::emulated
 			auto device = std::make_shared<SkylanderPortalDevice>();
 			AttachDevice(device);
 		}
-	#ifdef HAS_LIBUSB
+#ifdef HAS_LIBUSB
 		else if (auto usb_portal = FindDeviceById(0x1430, 0x1F17))
 		{
 			cemuLog_logDebug(LogType::Force, "Attaching Xbox 360 Portal");
@@ -37,7 +38,7 @@ namespace nsyshid::backend::emulated
 			auto device = std::make_shared<SkylanderXbox360PortalLibusb>(usb_portal);
 			AttachDevice(device);
 		}
-	#endif
+#endif
 		if (GetConfig().emulated_usb_devices.emulate_infinity_base && !FindDeviceById(0x0E6F, 0x0129))
 		{
 			cemuLog_logDebug(LogType::Force, "Attaching Emulated Base");
@@ -51,6 +52,25 @@ namespace nsyshid::backend::emulated
 			// Add Dimensions Toypad
 			auto device = std::make_shared<DimensionsToypadDevice>();
 			AttachDevice(device);
+		}
+		if (GetConfig().emulated_usb_devices.emulate_udp_device)
+		{
+			emulated_usb_udp::EmulatedUSBUDPClient::Settings settings{
+				GetConfig().emulated_usb_devices.udp_host.GetValue(),
+				GetConfig().emulated_usb_devices.udp_port.GetValue()};
+			auto device = EmulatedUSBDevice::Create(settings);
+			if (device)
+			{
+				if (!FindDeviceById(device->m_vendorId, device->m_productId))
+				{
+					cemuLog_logDebug(LogType::Force, "Attaching Emulated UDP USB device");
+					AttachDevice(device);
+				}
+			}
+			else
+			{
+				cemuLog_logDebug(LogType::Force, "Failed to attach Emulated UDP USB device (device info unavailable)");
+			}
 		}
 	}
 } // namespace nsyshid::backend::emulated

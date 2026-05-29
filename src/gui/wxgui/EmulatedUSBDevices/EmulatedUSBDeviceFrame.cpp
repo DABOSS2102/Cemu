@@ -47,6 +47,7 @@ EmulatedUSBDeviceFrame::EmulatedUSBDeviceFrame(wxWindow* parent)
 	notebook->AddPage(AddSkylanderPage(notebook), _("Skylanders Portal"));
 	notebook->AddPage(AddInfinityPage(notebook), _("Infinity Base"));
 	notebook->AddPage(AddDimensionsPage(notebook), _("Dimensions Toypad"));
+	notebook->AddPage(AddUDPDevicePage(notebook), _("UDP Device"));
 
 	sizer->Add(notebook, 1, wxEXPAND | wxALL, 2);
 
@@ -163,6 +164,55 @@ wxPanel* EmulatedUSBDeviceFrame::AddDimensionsPage(wxNotebook* notebook)
 	panel_sizer->Add(box_sizer, 1, wxEXPAND | wxALL, 2);
 	panel->SetSizerAndFit(panel_sizer);
 
+	return panel;
+}
+
+wxPanel* EmulatedUSBDeviceFrame::AddUDPDevicePage(wxNotebook* notebook)
+{
+	auto* panel = new wxPanel(notebook);
+	auto* panel_sizer = new wxBoxSizer(wxVERTICAL);
+	auto* box = new wxStaticBox(panel, wxID_ANY, _("UDP Emulated USB Device"));
+	auto* box_sizer = new wxStaticBoxSizer(box, wxVERTICAL);
+
+	auto* row = new wxBoxSizer(wxHORIZONTAL);
+	m_emulateUDPDevice = new wxCheckBox(box, wxID_ANY, _("Enable UDP Emulated USB Device"));
+	m_emulateUDPDevice->SetValue(GetConfig().emulated_usb_devices.emulate_udp_device);
+	m_emulateUDPDevice->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.emulate_udp_device = m_emulateUDPDevice->IsChecked();
+		GetConfigHandle().Save();
+	});
+	row->Add(m_emulateUDPDevice, 1, wxEXPAND | wxALL, 2);
+	box_sizer->Add(row, 1, wxEXPAND | wxALL, 2);
+
+	auto* host_row = new wxBoxSizer(wxHORIZONTAL);
+	host_row->Add(new wxStaticText(box, wxID_ANY, _("Host")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+	m_udpHost = new wxTextCtrl(box, wxID_ANY, GetConfig().emulated_usb_devices.udp_host.GetValue());
+	m_udpHost->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+		GetConfig().emulated_usb_devices.udp_host = m_udpHost->GetValue().ToStdString();
+		GetConfigHandle().Save();
+	});
+	host_row->Add(m_udpHost, 1, wxEXPAND | wxALL, 2);
+	box_sizer->Add(host_row, 1, wxEXPAND | wxALL, 2);
+
+	auto* port_row = new wxBoxSizer(wxHORIZONTAL);
+	port_row->Add(new wxStaticText(box, wxID_ANY, _("Port")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+	wxIntegerValidator<uint16> validator;
+	m_udpPort = new wxTextCtrl(box, wxID_ANY,
+							   fmt::format("{}", GetConfig().emulated_usb_devices.udp_port.GetValue()),
+							   wxDefaultPosition, wxDefaultSize, 0, validator);
+	m_udpPort->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+		long value = 0;
+		if (m_udpPort->GetValue().ToLong(&value) && value >= 0 && value <= 0xFFFF)
+		{
+			GetConfig().emulated_usb_devices.udp_port = static_cast<uint16>(value);
+			GetConfigHandle().Save();
+		}
+	});
+	port_row->Add(m_udpPort, 1, wxEXPAND | wxALL, 2);
+	box_sizer->Add(port_row, 1, wxEXPAND | wxALL, 2);
+
+	panel_sizer->Add(box_sizer, 1, wxEXPAND | wxALL, 2);
+	panel->SetSizerAndFit(panel_sizer);
 	return panel;
 }
 

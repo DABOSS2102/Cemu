@@ -289,6 +289,9 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	emulated_usb_devices.emulate_skylander_portal = usbdevices.get("EmulateSkylanderPortal", emulated_usb_devices.emulate_skylander_portal);
 	emulated_usb_devices.emulate_infinity_base = usbdevices.get("EmulateInfinityBase", emulated_usb_devices.emulate_infinity_base);
 	emulated_usb_devices.emulate_dimensions_toypad = usbdevices.get("EmulateDimensionsToypad", emulated_usb_devices.emulate_dimensions_toypad);
+	emulated_usb_devices.emulate_udp_device = usbdevices.get("EmulateUDPDevice", emulated_usb_devices.emulate_udp_device);
+	emulated_usb_devices.udp_host = usbdevices.get("UDPHost", emulated_usb_devices.udp_host);
+	emulated_usb_devices.udp_port = usbdevices.get("UDPPort", emulated_usb_devices.udp_port);
 
 	return parser;
 }
@@ -453,6 +456,9 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	usbdevices.set("EmulateSkylanderPortal", emulated_usb_devices.emulate_skylander_portal.GetValue());
 	usbdevices.set("EmulateInfinityBase", emulated_usb_devices.emulate_infinity_base.GetValue());
 	usbdevices.set("EmulateDimensionsToypad", emulated_usb_devices.emulate_dimensions_toypad.GetValue());
+	usbdevices.set("EmulateUDPDevice", emulated_usb_devices.emulate_udp_device.GetValue());
+	usbdevices.set("UDPHost", emulated_usb_devices.udp_host);
+	usbdevices.set("UDPPort", emulated_usb_devices.udp_port);
 
 	return config;
 }
