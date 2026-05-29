@@ -291,7 +291,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	emulated_usb_devices.emulate_dimensions_toypad = usbdevices.get("EmulateDimensionsToypad", emulated_usb_devices.emulate_dimensions_toypad);
 	emulated_usb_devices.emulate_udp_device = usbdevices.get("EmulateUDPDevice", emulated_usb_devices.emulate_udp_device);
 	emulated_usb_devices.udp_host = usbdevices.get("UDPHost", emulated_usb_devices.udp_host);
-	emulated_usb_devices.udp_port = usbdevices.get("UDPPort", emulated_usb_devices.udp_port);
+	emulated_usb_devices.udp_port = static_cast<uint16>(usbdevices.get<uint32>("UDPPort", emulated_usb_devices.udp_port.GetInitValue()));
 
 	return parser;
 }
@@ -458,7 +458,7 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	usbdevices.set("EmulateDimensionsToypad", emulated_usb_devices.emulate_dimensions_toypad.GetValue());
 	usbdevices.set("EmulateUDPDevice", emulated_usb_devices.emulate_udp_device.GetValue());
 	usbdevices.set("UDPHost", emulated_usb_devices.udp_host);
-	usbdevices.set("UDPPort", emulated_usb_devices.udp_port);
+	usbdevices.set("UDPPort", static_cast<uint32>(emulated_usb_devices.udp_port.GetValue()));
 
 	return config;
 }

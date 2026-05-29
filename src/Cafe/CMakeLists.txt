@@ -425,6 +425,12 @@ add_library(CemuCafe
   OS/libs/nsyshid/Whitelist.h
   OS/libs/nsyshid/BackendEmulated.cpp
   OS/libs/nsyshid/BackendEmulated.h
+  OS/libs/nsyshid/EmulatedUSBDevice.cpp
+  OS/libs/nsyshid/EmulatedUSBDevice.h
+  OS/libs/nsyshid/EmulatedUSBUDPClient.cpp
+  OS/libs/nsyshid/EmulatedUSBUDPClient.h
+  OS/libs/nsyshid/EmulatedUSBMessages.cpp
+  OS/libs/nsyshid/EmulatedUSBMessages.h
   OS/libs/nsyshid/Dimensions.cpp
   OS/libs/nsyshid/Dimensions.h
   OS/libs/nsyshid/Infinity.cpp
