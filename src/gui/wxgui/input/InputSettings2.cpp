@@ -152,14 +152,12 @@ wxWindow* InputSettings2::initialize_page(size_t index)
 		auto* profiles = new wxComboBox(page, wxID_ANY, kDefaultProfileName);
 		sizer->Add(profiles, wxGBPosition(0, 1), wxDefaultSpan, wxALIGN_CENTER_VERTICAL | wxALL | wxEXPAND, 5);
 
-#if BOOST_OS_LINUX || BOOST_OS_BSD
 		// We rely on the wxEVT_COMBOBOX_DROPDOWN event to trigger filling the profile list,
-		// but on wxGTK the dropdown button cannot be clicked if the list is empty
-		// so as a quick and dirty workaround we fill the list here
+		// but if the list starts empty some platforms don't emit interactions reliably.
+		// Pre-fill once during initialization to keep behavior consistent.
 		wxCommandEvent tmpCmdEvt;
 		tmpCmdEvt.SetEventObject(profiles);
 		on_profile_dropdown(tmpCmdEvt);
-#endif
 
 		if (emulated_controller && emulated_controller->has_profile_name())
 		{
@@ -197,6 +195,7 @@ wxWindow* InputSettings2::initialize_page(size_t index)
 		delete_bttn->Bind(wxEVT_BUTTON, &InputSettings2::on_profile_delete, this);
 
 		profiles->Bind(wxEVT_COMBOBOX_DROPDOWN, &InputSettings2::on_profile_dropdown, this);
+		profiles->Bind(wxEVT_COMBOBOX, &InputSettings2::on_profile_text_changed, this);
 		profiles->Bind(wxEVT_TEXT, &InputSettings2::on_profile_text_changed, this);
 
 		page_data.m_profiles = profiles;
@@ -348,7 +347,23 @@ void InputSettings2::update_state()
 	EmulatedControllerPtr emulated_controller = page_data.m_controller;
 	auto has_controllers = false;
 
+	{
+		wxCommandEvent tmpCmdEvt;
+		tmpCmdEvt.SetEventObject(page_data.m_profiles);
+		on_profile_dropdown(tmpCmdEvt);
+	}
+	if (emulated_controller && emulated_controller->has_profile_name())
+		page_data.m_profiles->SetValue(emulated_controller->get_profile_name());
+
+	wxCommandEvent profileTextEvt(wxEVT_TEXT);
+	profileTextEvt.SetEventObject(page_data.m_profiles);
+	profileTextEvt.SetString(page_data.m_profiles->GetValue());
+	on_profile_text_changed(profileTextEvt);
+
 	// update emulated
+	page_data.m_emulated_controller->Clear();
+	page_data.m_emulated_controller->AppendString(_("Disabled"));
+	page_data.m_emulated_controller->SetSelection(0);
 	if(emulated_controller)
 	{
 		has_controllers = !emulated_controller->get_controllers().empty();
@@ -373,10 +388,6 @@ void InputSettings2::update_state()
 					page_data.m_controllers->SetStringSelection(controller_selection);
 			}
 		}
-	}
-	else
-	{
-		page_data.m_emulated_controller->SetValue(_("Disabled"));
 	}
 
 	ControllerPtr controller;
@@ -553,7 +564,7 @@ void InputSettings2::on_profile_dropdown(wxCommandEvent& event)
 	wxASSERT(profile_names);
 	wxWindowUpdateLocker lock(profile_names);
 	
-	const auto selected_value = profile_names->GetStringSelection();
+	const auto selected_value = profile_names->GetValue();
 	profile_names->Clear();
 
 	for(const auto& profile : InputManager::get_profiles())
@@ -561,7 +572,11 @@ void InputSettings2::on_profile_dropdown(wxCommandEvent& event)
 		profile_names->Append(wxString::FromUTF8(profile));
 	}
 
-	profile_names->SetStringSelection(selected_value);
+	if (!selected_value.empty())
+	{
+		if (!profile_names->SetStringSelection(selected_value))
+			profile_names->SetValue(selected_value);
+	}
 }
 
 void InputSettings2::on_profile_text_changed(wxCommandEvent& event)
@@ -720,6 +735,12 @@ void InputSettings2::on_emulated_controller_selected(wxCommandEvent& event)
 
 			// set new controller
 			const auto new_controller = InputManager::instance().set_controller(page_index, type);
+			if (!new_controller)
+			{
+				page_data.m_controller = {};
+				update_state();
+				return;
+			}
 			page_data.m_controller = new_controller;
 
 			// append controllers if some were already added before
