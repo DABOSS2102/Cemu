@@ -89,10 +89,8 @@ namespace nsyshid::emulated_usb_udp
 	{
 	  public:
 		ServerMessage() = delete;
-
-	  protected:
 		[[nodiscard]] bool ValidateCRC32(size_t size) const;
-	};
+	  };
 
 	struct RequestHeader : public ClientMessage
 	{

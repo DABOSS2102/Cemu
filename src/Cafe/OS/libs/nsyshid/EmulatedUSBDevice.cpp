@@ -17,6 +17,7 @@ namespace nsyshid
 	std::shared_ptr<EmulatedUSBDevice> EmulatedUSBDevice::Create(
 		const emulated_usb_udp::EmulatedUSBUDPClient::Settings& settings)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Create");
 		auto client = std::make_unique<emulated_usb_udp::EmulatedUSBUDPClient>(settings);
 		if (!client->Start())
 			return nullptr;
@@ -36,6 +37,7 @@ namespace nsyshid
 		: Device(info.vendor_id, info.product_id, info.interface_index, info.interface_sub_class, info.protocol),
 		  m_client(std::move(client))
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Emulated USB Device");
 		m_maxPacketSizeRX = info.max_packet_size_rx;
 		m_maxPacketSizeTX = info.max_packet_size_tx;
 	}
@@ -49,6 +51,7 @@ namespace nsyshid
 
 	bool EmulatedUSBDevice::Open()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Open");
 		if (m_is_opened)
 			return true;
 		if (!m_client || !m_client->IsRunning())
@@ -62,6 +65,7 @@ namespace nsyshid
 
 	void EmulatedUSBDevice::Close()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Close");
 		if (!m_is_opened)
 			return;
 		if (m_client)
@@ -71,11 +75,13 @@ namespace nsyshid
 
 	bool EmulatedUSBDevice::IsOpened()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Is Opened");
 		return m_is_opened;
 	}
 
 	Device::ReadResult EmulatedUSBDevice::Read(ReadMessage* message)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Read");
 		if (!m_client || !m_is_opened)
 			return Device::ReadResult::Error;
 
@@ -102,6 +108,7 @@ namespace nsyshid
 
 	Device::WriteResult EmulatedUSBDevice::Write(WriteMessage* message)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Write");
 		if (!m_client || !m_is_opened)
 			return Device::WriteResult::Error;
 
@@ -125,6 +132,7 @@ namespace nsyshid
 
 	bool EmulatedUSBDevice::GetDescriptor(uint8 descType, uint8 descIndex, uint16 lang, uint8* output, uint32 outputMaxLength)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Get Descriptor");
 		if (!m_client || !m_is_opened)
 			return false;
 
@@ -140,6 +148,7 @@ namespace nsyshid
 
 	bool EmulatedUSBDevice::SetIdle(uint8 ifIndex, uint8 reportId, uint8 duration)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Set Idle");
 		if (!m_client || !m_is_opened)
 			return false;
 		return m_client->RequestSetIdle(ifIndex, reportId, duration, kRequestTimeout);
@@ -147,6 +156,7 @@ namespace nsyshid
 
 	bool EmulatedUSBDevice::SetProtocol(uint8 ifIndex, uint8 protocol)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Set Protocol");
 		if (!m_client || !m_is_opened)
 			return false;
 		return m_client->RequestSetProtocol(ifIndex, protocol, kRequestTimeout);
@@ -154,6 +164,7 @@ namespace nsyshid
 
 	bool EmulatedUSBDevice::SetReport(ReportMessage* message)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBDevice: Set Report");
 		if (!m_client || !m_is_opened)
 			return false;
 		return m_client->RequestSetReport(message->reportType, message->reportId, message->data, message->length, kRequestTimeout);

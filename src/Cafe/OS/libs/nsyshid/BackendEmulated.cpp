@@ -11,7 +11,7 @@ namespace nsyshid::backend::emulated
 {
 	BackendEmulated::BackendEmulated()
 	{
-		cemuLog_logDebug(LogType::Force, "nsyshid::BackendEmulated: emulated backend initialised");
+		cemuLog_logDebug(LogType::Force, "nsyshid::BackendEmulated: emulated backend initialized");
 	}
 
 	BackendEmulated::~BackendEmulated() = default;
@@ -55,9 +55,12 @@ namespace nsyshid::backend::emulated
 		}
 		if (GetConfig().emulated_usb_devices.emulate_udp_device)
 		{
+			cemuLog_logDebug(LogType::Force, "emulated_usb_devices.emulate_udp_device was true");
 			emulated_usb_udp::EmulatedUSBUDPClient::Settings settings{
 				GetConfig().emulated_usb_devices.udp_host.GetValue(),
 				GetConfig().emulated_usb_devices.udp_port.GetValue()};
+			cemuLog_logDebug(LogType::Force, "emulated_usb_devices.udp_host: {}", settings.host);
+			cemuLog_logDebug(LogType::Force, "emulated_usb_devices.udp_port: {}", settings.port);
 			auto device = EmulatedUSBDevice::Create(settings);
 			if (device)
 			{
@@ -65,6 +68,12 @@ namespace nsyshid::backend::emulated
 				{
 					cemuLog_logDebug(LogType::Force, "Attaching Emulated UDP USB device");
 					AttachDevice(device);
+				}
+				else
+				{
+					cemuLog_logDebug(LogType::Force, "Could not FindDeviceById()");
+					cemuLog_logDebug(LogType::Force, "Vendor ID: {}", device->m_vendorId);
+					cemuLog_logDebug(LogType::Force, "Product ID: {}", device->m_productId);
 				}
 			}
 			else

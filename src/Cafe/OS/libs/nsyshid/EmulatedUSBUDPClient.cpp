@@ -20,6 +20,7 @@ namespace nsyshid::emulated_usb_udp
 
 		std::optional<Status> ParseStatus(const std::vector<uint8_t>& payload)
 		{
+			cemuLog_logDebug(LogType::Force, "Parsing status");
 			if (payload.size() < sizeof(StatusResponse))
 				return std::nullopt;
 			const auto* response = reinterpret_cast<const StatusResponse*>(payload.data());
@@ -46,8 +47,12 @@ namespace nsyshid::emulated_usb_udp
 
 	bool EmulatedUSBUDPClient::Start()
 	{
+		cemuLog_logDebug(LogType::Force, "Starting EmulatedUSBUDPClient");
 		if (m_running.load(std::memory_order_relaxed))
+		{
+			cemuLog_logDebug(LogType::Force, "Already Started");
 			return true;
+		}
 
 		try
 		{
@@ -57,14 +62,23 @@ namespace nsyshid::emulated_usb_udp
 			m_receiver_endpoint = *resolver.resolve(m_settings.host, fmt::format("{}", m_settings.port)).cbegin();
 
 			if (m_socket.is_open())
+			{
+				cemuLog_logDebug(LogType::Force, "Socket is already open");
 				m_socket.close();
+			}
 
+			cemuLog_logDebug(LogType::Force, "Opening socket");
 			m_socket.open(ip::udp::v4());
+			cemuLog_logDebug(LogType::Force, "Binding socket");
 			m_socket.bind(ip::udp::endpoint(ip::udp::v4(), 0));
-			m_socket_wakeup_endpoint = ip::udp::endpoint(ip::udp::address_v4::loopback(), m_socket.local_endpoint().port());
+			cemuLog_logDebug(LogType::Force, "Setting wakeup endpoint");
+			m_socket_wakeup_endpoint = ip::udp::endpoint(ip::address_v4::loopback(), m_socket.local_endpoint().port());
 			m_running = true;
+			cemuLog_logDebug(LogType::Force, "Setting up reader thread");
 			m_reader_thread = std::thread(&EmulatedUSBUDPClient::ReaderThread, this);
+			cemuLog_logDebug(LogType::Force, "Setting up writer thread");
 			m_writer_thread = std::thread(&EmulatedUSBUDPClient::WriterThread, this);
+			cemuLog_logDebug(LogType::Force, "Started");
 			return true;
 		} catch (const std::exception& ex)
 		{
@@ -76,18 +90,45 @@ namespace nsyshid::emulated_usb_udp
 
 	void EmulatedUSBUDPClient::Stop()
 	{
+		cemuLog_logDebug(LogType::Force, "Stopping EmulatedUSBUDPClient");
 		if (!m_running.load(std::memory_order_relaxed))
+		{
+			cemuLog_logDebug(LogType::Force, "Already Stopped");
 			return;
+		}
 
 		m_running = false;
 		WakeReader();
 		if (m_reader_thread.joinable())
+		{
+			cemuLog_logDebug(LogType::Force, "Joining reader thread");
 			m_reader_thread.join();
+		}
+		else
+		{
+			cemuLog_logDebug(LogType::Force, "Reader thread not joinable");
+		}
+			
 		m_writer_jobs.push(nullptr);
 		if (m_writer_thread.joinable())
+		{
+			cemuLog_logDebug(LogType::Force, "Joining writer thread");
 			m_writer_thread.join();
+		}
+		else
+		{
+			cemuLog_logDebug(LogType::Force, "Writer thread not joinable");
+		}
+
 		if (m_socket.is_open())
+		{
+			cemuLog_logDebug(LogType::Force, "Closing socket");
 			m_socket.close();
+		}
+		else
+		{
+			cemuLog_logDebug(LogType::Force, "Socket is already closed");
+		}
 	}
 
 	bool EmulatedUSBUDPClient::IsRunning() const
@@ -97,6 +138,7 @@ namespace nsyshid::emulated_usb_udp
 
 	std::optional<DeviceInfoPayload> EmulatedUSBUDPClient::RequestDeviceInfo(std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Requesting device info");
 		if (!m_running.load(std::memory_order_relaxed))
 			return std::nullopt;
 
@@ -115,6 +157,7 @@ namespace nsyshid::emulated_usb_udp
 
 	bool EmulatedUSBUDPClient::RequestOpen(std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request open");
 		if (!m_running.load(std::memory_order_relaxed))
 			return false;
 
@@ -130,6 +173,7 @@ namespace nsyshid::emulated_usb_udp
 
 	bool EmulatedUSBUDPClient::RequestClose(std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request close");
 		if (!m_running.load(std::memory_order_relaxed))
 			return false;
 
@@ -145,6 +189,7 @@ namespace nsyshid::emulated_usb_udp
 
 	std::optional<EmulatedUSBUDPClient::ReadResult> EmulatedUSBUDPClient::RequestRead(uint32_t length, std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request read");
 		if (!m_running.load(std::memory_order_relaxed))
 			return std::nullopt;
 
@@ -172,6 +217,7 @@ namespace nsyshid::emulated_usb_udp
 	std::optional<EmulatedUSBUDPClient::WriteResult> EmulatedUSBUDPClient::RequestWrite(const uint8_t* data, uint32_t length,
 																						std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request write");
 		if (!m_running.load(std::memory_order_relaxed))
 			return std::nullopt;
 
@@ -189,6 +235,7 @@ namespace nsyshid::emulated_usb_udp
 	std::optional<EmulatedUSBUDPClient::DescriptorResult> EmulatedUSBUDPClient::RequestGetDescriptor(
 		uint8_t desc_type, uint8_t desc_index, uint16_t lang, uint32_t max_length, std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request get descriptor");
 		if (!m_running.load(std::memory_order_relaxed))
 			return std::nullopt;
 
@@ -215,6 +262,7 @@ namespace nsyshid::emulated_usb_udp
 
 	bool EmulatedUSBUDPClient::RequestSetIdle(uint8_t if_index, uint8_t report_id, uint8_t duration, std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request set idle");
 		if (!m_running.load(std::memory_order_relaxed))
 			return false;
 
@@ -230,6 +278,7 @@ namespace nsyshid::emulated_usb_udp
 
 	bool EmulatedUSBUDPClient::RequestSetProtocol(uint8_t if_index, uint8_t protocol, std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request set protocol");
 		if (!m_running.load(std::memory_order_relaxed))
 			return false;
 
@@ -246,6 +295,7 @@ namespace nsyshid::emulated_usb_udp
 	bool EmulatedUSBUDPClient::RequestSetReport(uint8_t report_type, uint8_t report_id, const uint8_t* data, uint32_t length,
 												std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Request set report");
 		if (!m_running.load(std::memory_order_relaxed))
 			return false;
 
@@ -262,6 +312,7 @@ namespace nsyshid::emulated_usb_udp
 	std::optional<std::vector<uint8_t>> EmulatedUSBUDPClient::SendRequestAndWait(std::vector<uint8_t> packet, uint32_t request_id,
 																				 MessageType expected_type, std::chrono::milliseconds timeout)
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Send Request And Wait");
 		if (!m_running.load(std::memory_order_relaxed))
 			return std::nullopt;
 
@@ -297,11 +348,13 @@ namespace nsyshid::emulated_usb_udp
 
 	uint32_t EmulatedUSBUDPClient::NextRequestId()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Next Request Id");
 		return ++m_request_id;
 	}
 
 	void EmulatedUSBUDPClient::ReaderThread()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Reader Thread");
 		SetThreadName("EmulatedUSBUDP-reader");
 		while (m_running.load(std::memory_order_relaxed))
 		{
@@ -358,6 +411,7 @@ namespace nsyshid::emulated_usb_udp
 
 	void EmulatedUSBUDPClient::WriterThread()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Writer Thread");
 		SetThreadName("EmulatedUSBUDP-writer");
 		while (m_running.load(std::memory_order_relaxed))
 		{
@@ -379,6 +433,7 @@ namespace nsyshid::emulated_usb_udp
 
 	void EmulatedUSBUDPClient::WakeReader()
 	{
+		cemuLog_logDebug(LogType::Force, "EmulatedUSBUDPClient: Wake Reader");
 		if (m_socket_wakeup_endpoint.port() == 0)
 			return;
 
